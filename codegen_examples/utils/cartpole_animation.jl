@@ -1,4 +1,4 @@
-# courtesy of Kevin Tracey
+# courtesy of Kevin Tracy
 function rotx(θ)
     s, c = sincos(θ)
     return [1 0 0; 0 c -s; 0 s c]
