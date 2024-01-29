@@ -1,0 +1,4 @@
+name = "TinyMPC"
+uuid = "30135025-f3e0-4050-9784-f9d33a970231"
+authors = ["xkhainguyen <nxk120199@gmail.com>"]
+version = "0.1.0"
