@@ -40,3 +40,34 @@ function animate_cartpole(X, dt)
     mc.setanimation!(vis, anim)
     return mc.render(vis)
 end
+
+function mat_from_vec(X)
+    # convert a vector of vectors to a matrix 
+    Xm = hcat(X...)
+    return Xm 
+end
+
+function visualize_quad_state(X)
+    # visualize the state history of the quadrotor 
+    X_m = mat_from_vec(X)
+    display(plot(X_m[1:7,:]',label=["x" "y" "z" "qw" "qx" "qy" "qz"],
+    linestyle=[:solid :solid :solid :dash :dash :dash :dash], linewidth=[2 2 2 2 2 2 2],
+                 title="State History", xlabel="time (s)", ylabel="x"))
+end
+
+function visualize_quad_xy(Xreal, Xref=nothing)
+    # visualize the xy position of the quadrotor
+    if Xref != nothing
+        X_m = mat_from_vec(Xref)
+        plot(X_m[2,:],X_m[1,:],label="ref",
+        linestyle=:solid, linewidth=2,
+                     title="State History", xlabel="y", ylabel="x")
+        X_m = mat_from_vec(Xreal)   
+        display(plot!(X_m[2,:],X_m[1,:],label="real", linestyle=:dash, linewidth=2,
+                    title="State History", xlabel="y", ylabel="x", aspect_ratio=:equal))
+    else
+        X_m = mat_from_vec(Xreal)   
+        display(plot(X_m[2,:],X_m[1,:],label="real", linestyle=:dash, linewidth=2,
+                    title="State History", xlabel="y", ylabel="x", aspect_ratio=:equal))
+    end
+end
