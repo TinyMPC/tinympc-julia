@@ -10,14 +10,7 @@ Julia wrapper for [TinyMPC](https://tinympc.org/). It supports code generation a
 git clone --recurse-submodules https://github.com/TinyMPC/tinympc-julia.git
 ```
 
-2. Install package
-
-```bash
-cd tinympc-julia
-pip install -e .
-```
-
-3. Run the interactive example `interactive_cartpole.ipynb`
+2. Run the interactive example `interactive_cartpole_ext.ipynb`
 
 ## Documentation
 
