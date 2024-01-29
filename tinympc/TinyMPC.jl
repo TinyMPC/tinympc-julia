@@ -1,5 +1,8 @@
 module TinyMPC
 
+# Temporary package
+# There can be better ways to do this
+
 # Compile the generated code
 function compile_lib(dir::String)
     print("Compiling library to ", dir, "\n")
