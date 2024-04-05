@@ -14,6 +14,6 @@ git clone --recurse-submodules https://github.com/TinyMPC/tinympc-julia.git
 
 ## Documentation
 
-The interface is documented [here](https://tinympc.org/docs/).
+The interface is documented [here](https://tinympc.org/).
 
 ## Packaging
