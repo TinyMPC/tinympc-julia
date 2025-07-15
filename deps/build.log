@@ -1,0 +1,34 @@
+-- Found Julia: /home/moises/.juliaup/bin/julia (version 1.11.6)
+-- Julia include dir: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/include/julia
+-- Julia libraries: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/lib/libjulia.so
+-- Julia executable: /home/moises/.juliaup/bin/julia
+-- Julia include dir: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/include/julia
+-- Julia libraries: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/lib/libjulia.so
+-- TinyMPC Julia wrapper configured successfully
+--   - Using direct Julia C API (no CxxWrap)
+--   - Target: libtinympc_jl.so
+--   - Build with: make -j${nproc}
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build
+[ 23%] Built target tinympcstatic
+[ 28%] Building CXX object CMakeFiles/tinympc_jl.dir/src/bindings.cpp.o
+[ 38%] Built target cartpole_example
+[ 47%] Built target quadrotor_linear_constraints
+[ 57%] Built target rocket_landing_mpc
+[ 71%] Built target codegen_random
+[ 76%] Built target quadrotor_tracking
+[ 85%] Built target quadrotor_hovering
+[ 95%] Built target codegen_cartpole
+[100%] Linking CXX shared library tinympc_jl.so
+[100%] Built target tinympc_jl
+Building TinyMPC Julia wrapper...
+Package root: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia
+Build directory: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build
+Lib directory: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/lib
+Configuring with CMake...
+Running in /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build: ``cmake ..``
+Building with make...
+Running in /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build: ``make -j22``
+Copying library from /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build/tinympc_jl.so to /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/lib/libtinympc_jl.so
+TinyMPC Julia wrapper built successfully!
