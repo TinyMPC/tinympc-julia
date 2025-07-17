@@ -1,7 +1,9 @@
 # Cartpole Code Generation Example (Julia)
-using TinyMPC, LinearAlgebra
+include("../src/TinyMPC.jl")
+using .TinyMPC
+using LinearAlgebra
 
-# System matrices
+# System matrices (matches Python/MATLAB examples)
 A = [1.0  0.01  0.0   0.0;
      0.0  1.0   0.039 0.0;
      0.0  0.0   1.002 0.01;
@@ -12,13 +14,23 @@ R = diagm([1.0])
 N = 20
 rho = 1.0
 
+# Input constraints (matching Python example)
+u_min = fill(-0.5, 1, N-1)  # nu x (N-1)
+u_max = fill(0.5, 1, N-1)   # nu x (N-1)
+
+# Create solver and setup with bounds
 solver = TinyMPCSolver()
-status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N)
+status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
+                u_min=u_min, u_max=u_max, verbose=false)
 @assert status == 0
 
+# Set references (all zeros for code generation)
 set_x_ref!(solver, zeros(4, N))
 set_u_ref!(solver, zeros(1, N-1))
 
 # Generate C++ code to ./out directory
-codegen(solver, joinpath(@__DIR__, "out"), verbose=true)
-println("✅ Code generation complete") 
+out_dir = joinpath(@__DIR__, "out")
+status = codegen(solver, out_dir, verbose=true)
+@assert status == 0
+
+println("✅ Code generation complete at: $out_dir") 

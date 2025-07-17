@@ -5,6 +5,7 @@ examples/*.h
 build/
 compile_trace.txt
 debug_test.jl
+examples/out/*
 
 /*.tar.gz
 /tmp

@@ -1,36 +1,54 @@
 module TinyMPC
 
 export TinyMPCSolver, setup!, solve!, get_solution, set_x0!, set_x_ref!, set_u_ref!, 
-       set_bound_constraints!, set_cone_constraints!, set_linear_constraints!,
-       get_iterations, is_solved, update_settings!, compute_cache_terms,
-       set_sensitivity_matrices!, codegen, codegen_with_sensitivity, reset!
+       set_bound_constraints!, update_settings!, compute_cache_terms,
+       set_sensitivity_matrices!, set_cache_terms!, print_problem_data,
+       compute_sensitivity_autograd, codegen, codegen_with_sensitivity
 
 using LinearAlgebra
 using Libdl
+using ForwardDiff
 
-# Define the path to the C++ library
-const lib_name = "libtinympc_jl"
-const lib_path = joinpath(@__DIR__, "..", "lib", lib_name)
+# Completely defer all library operations to runtime
+const _runtime_state = Ref{Dict{Symbol, Any}}()
 
-# Global flag to track if library has been validated
-const _lib_validated = Ref(false)
+# Initialize runtime state on first access
+function _init_runtime_state()
+    if !isassigned(_runtime_state)
+        _runtime_state[] = Dict{Symbol, Any}(
+            :lib_loaded => false,
+            :lib_name => "libtinympc_jl",
+            :sensitivity_store => Dict{Symbol, Any}()
+        )
+    end
+    return _runtime_state[]
+end
 
-# Check if library exists and validate it
-function _validate_library()
-    if !_lib_validated[]
+# Get library path (runtime only)
+function _get_lib_path()
+    state = _init_runtime_state()
+    lib_name = state[:lib_name]
+    return joinpath(dirname(@__DIR__), "lib", lib_name)
+end
+
+# Ensure library is loaded (runtime only)
+function _ensure_library_loaded()
+    state = _init_runtime_state()
+    if !state[:lib_loaded]
+        lib_path = _get_lib_path()
         full_lib_path = lib_path * "." * Libdl.dlext
+        
         if !isfile(full_lib_path)
-            error("TinyMPC library not found at $full_lib_path. Please build the package first with: julia --project=. -e \"using Pkg; Pkg.build()\"")
+            error("TinyMPC library not found at $full_lib_path. Please build the package first.")
         end
-        _lib_validated[] = true
+        
+        state[:lib_loaded] = true
     end
 end
 
-# Safe initialization function (precompilation-safe)
+# Empty init function
 function __init__()
-    # Don't perform file system operations during precompilation
-    # Library validation happens on first use instead
-    println("TinyMPC Julia wrapper loaded successfully")
+    # Absolutely nothing here to avoid precompilation issues
 end
 
 """
@@ -80,16 +98,43 @@ Status code (0 for success)
 """
 function setup!(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64}, f::Vector{Float64},
                 Q::Matrix{Float64}, R::Matrix{Float64}, rho::Float64, 
-                nx::Int, nu::Int, N::Int; verbose::Bool=false)
+                nx::Int, nu::Int, N::Int; 
+                verbose::Bool=false,
+                abs_pri_tol::Float64=1e-3,
+                abs_dua_tol::Float64=1e-3,
+                max_iter::Int=100,
+                check_termination::Int=1,
+                en_state_bound::Int=1,
+                en_input_bound::Int=1,
+                en_state_soc::Int=0,
+                en_input_soc::Int=0,
+                en_state_linear::Int=0,
+                en_input_linear::Int=0,
+                adaptive_rho::Bool=false,
+                adaptive_rho_min::Float64=0.1,
+                adaptive_rho_max::Float64=10.0,
+                adaptive_rho_enable_clipping::Bool=true,
+                x_min::Union{Matrix{Float64}, Nothing}=nothing,
+                x_max::Union{Matrix{Float64}, Nothing}=nothing,
+                u_min::Union{Matrix{Float64}, Nothing}=nothing,
+                u_max::Union{Matrix{Float64}, Nothing}=nothing)
     
-    # Validate library on first use
-    _validate_library()
+    # Ensure library is loaded
+    _ensure_library_loaded()
     
-    # Create default bound constraints (no constraints)
-    x_min = fill(-1e17, nx, N)
-    x_max = fill(1e17, nx, N)
-    u_min = fill(-1e17, nu, N-1)
-    u_max = fill(1e17, nu, N-1)
+    # Handle bound constraints
+    if x_min === nothing
+        x_min = fill(-1e17, nx, N)
+    end
+    if x_max === nothing
+        x_max = fill(1e17, nx, N)
+    end
+    if u_min === nothing
+        u_min = fill(-1e17, nu, N-1)
+    end
+    if u_max === nothing
+        u_max = fill(1e17, nu, N-1)
+    end
     
     # Reshape f to be a matrix for consistency with C++ interface
     f_matrix = reshape(f, nx, 1)
@@ -100,7 +145,7 @@ function setup!(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64}, f
     solver.N[] = N
     
     # Call C++ setup function with simple C interface
-    status = ccall((:setup_solver, lib_path), Int32,
+    status = ccall((:setup_solver, _get_lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32,     # A
                     Ptr{Float64}, Int32, Int32,     # B
                     Ptr{Float64}, Int32, Int32,     # fdyn
@@ -126,6 +171,25 @@ function setup!(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64}, f
     
     if status == 0
         solver.is_initialized[] = true
+        
+        # Update solver settings with provided parameters
+        update_settings!(solver,
+                        abs_pri_tol=abs_pri_tol,
+                        abs_dua_tol=abs_dua_tol,
+                        max_iter=max_iter,
+                        check_termination=check_termination,
+                        en_state_bound=en_state_bound != 0,
+                        en_input_bound=en_input_bound != 0,
+                        en_state_soc=en_state_soc != 0,
+                        en_input_soc=en_input_soc != 0,
+                        en_state_linear=en_state_linear != 0,
+                        en_input_linear=en_input_linear != 0,
+                        adaptive_rho=adaptive_rho,
+                        adaptive_rho_min=adaptive_rho_min,
+                        adaptive_rho_max=adaptive_rho_max,
+                        adaptive_rho_enable_clipping=adaptive_rho_enable_clipping,
+                        verbose=false)
+        
         if verbose
             println("TinyMPC solver setup successful (nx=$nx, nu=$nu, N=$N)")
         end
@@ -150,12 +214,12 @@ function set_x0!(solver::TinyMPCSolver, x0::Vector{Float64}; verbose::Bool=false
     if status != 0
         return status
     end
-    _validate_library()
+    _ensure_library_loaded()
     
     # Reshape to matrix for C++ interface
     x0_matrix = reshape(x0, length(x0), 1)
     
-    status = ccall((:set_x0, lib_path), Int32,
+    status = ccall((:set_x0, _get_lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32, Int32),
                    x0_matrix, size(x0_matrix, 1), size(x0_matrix, 2), verbose ? 1 : 0)
     
@@ -180,9 +244,9 @@ function set_x_ref!(solver::TinyMPCSolver, x_ref::Matrix{Float64}; verbose::Bool
     if status != 0
         return status
     end
-    _validate_library()
+    _ensure_library_loaded()
     
-    status = ccall((:set_x_ref, lib_path), Int32,
+    status = ccall((:set_x_ref, _get_lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32, Int32),
                    x_ref, size(x_ref, 1), size(x_ref, 2), verbose ? 1 : 0)
     
@@ -207,9 +271,9 @@ function set_u_ref!(solver::TinyMPCSolver, u_ref::Matrix{Float64}; verbose::Bool
     if status != 0
         return status
     end
-    _validate_library()
+    _ensure_library_loaded()
     
-    status = ccall((:set_u_ref, lib_path), Int32,
+    status = ccall((:set_u_ref, _get_lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32, Int32),
                    u_ref, size(u_ref, 1), size(u_ref, 2), verbose ? 1 : 0)
     
@@ -236,7 +300,7 @@ function set_bound_constraints!(solver::TinyMPCSolver,
                                x_min::Matrix{Float64}, x_max::Matrix{Float64},
                                u_min::Matrix{Float64}, u_max::Matrix{Float64};
                                verbose::Bool=false)
-    status = ccall((:set_bound_constraints, lib_path), Int32,
+    status = ccall((:set_bound_constraints, _get_lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32,
                     Ptr{Float64}, Int32, Int32,
                     Ptr{Float64}, Int32, Int32,
@@ -270,9 +334,9 @@ function solve!(solver::TinyMPCSolver; verbose::Bool=false)
     if status != 0
         return status
     end
-    _validate_library()
+    _ensure_library_loaded()
     
-    status = ccall((:solve_mpc, lib_path), Int32, (Int32,), verbose ? 1 : 0)
+    status = ccall((:solve_mpc, _get_lib_path()), Int32, (Int32,), verbose ? 1 : 0)
     
     if verbose && status != 0
         println("Solver finished with status: $status")
@@ -299,7 +363,7 @@ function get_solution(solver::TinyMPCSolver)
     if status != 0
         error("Solver not initialized. Call setup!() first.")
     end
-    _validate_library()
+    _ensure_library_loaded()
     
     # Get solution dimensions first
     nx, nu, N = solver.nx[], solver.nu[], solver.N[]
@@ -315,7 +379,7 @@ function get_solution(solver::TinyMPCSolver)
     controls_cols = Ref{Int32}()
     
     # Get states
-    status_states = ccall((:get_states, lib_path), Int32,
+    status_states = ccall((:get_states, _get_lib_path()), Int32,
                          (Ptr{Float64}, Ref{Int32}, Ref{Int32}),
                          states_buffer, states_rows, states_cols)
     
@@ -324,7 +388,7 @@ function get_solution(solver::TinyMPCSolver)
     end
     
     # Get controls
-    status_controls = ccall((:get_controls, lib_path), Int32,
+    status_controls = ccall((:get_controls, _get_lib_path()), Int32,
                            (Ptr{Float64}, Ref{Int32}, Ref{Int32}),
                            controls_buffer, controls_rows, controls_cols)
     
@@ -339,49 +403,7 @@ function get_solution(solver::TinyMPCSolver)
     return (states=states, controls=controls)
 end
 
-"""
-    get_iterations(solver)
 
-Get the number of iterations from the last solve.
-
-# Arguments
-- `solver`: TinyMPCSolver instance
-
-# Returns
-Number of iterations (-1 if not available)
-"""
-function get_iterations(solver::TinyMPCSolver)
-    status = check_initialized(solver)
-    if status != 0
-        error("Solver not initialized. Call setup!() first.")
-    end
-    _validate_library()
-    
-    iterations = ccall((:get_iterations, lib_path), Int32, ())
-    return Int(iterations)
-end
-
-"""
-    is_solved(solver)
-
-Check if the problem was successfully solved.
-
-# Arguments  
-- `solver`: TinyMPCSolver instance
-
-# Returns
-True if solved, false otherwise
-"""
-function is_solved(solver::TinyMPCSolver)
-    status = check_initialized(solver)
-    if status != 0
-        error("Solver not initialized. Call setup!() first.")
-    end
-    _validate_library()
-    
-    solved = ccall((:is_solved, lib_path), Int32, ())
-    return solved != 0
-end
 
 # (Removed placeholder update_settings! here - see advanced implementation below)
 
@@ -400,9 +422,9 @@ function codegen(solver::TinyMPCSolver, output_dir::String; verbose::Bool=false)
     if status != 0
         error("Solver not initialized. Call setup!() first.")
     end
-    _validate_library()
+    _ensure_library_loaded()
     
-    status = ccall((:codegen, lib_path), Int32,
+    status = ccall((:codegen, _get_lib_path()), Int32,
                    (Cstring, Int32),
                    output_dir, verbose ? 1 : 0)
     
@@ -445,125 +467,86 @@ function _copy_build_artifacts(output_dir::String)
     end
 end
 
-# ------------------ Advanced Constraint APIs ------------------
-"""
-    set_cone_constraints!(solver, Acu, qcu, cu, Acx, qcx, cx; verbose=false)
 
-Set second-order cone (SOC) constraints on states and inputs.
-The arguments follow the MATLAB/Python convention:
-- `Acu`: Vector of start indices for each input cone (Vector{Int})
-- `qcu`: Vector of dimensions for each input cone (Vector{Int})
-- `cu`:  Vector of mu coefficients for each input cone (Vector{Float64})
-- `Acx`, `qcx`, `cx`: Same but for state cones
-"""
-function set_cone_constraints!(solver::TinyMPCSolver,
-                               Acu::Vector{Int}, qcu::Vector{Int}, cu::Vector{Float64},
-                               Acx::Vector{Int}, qcx::Vector{Int}, cx::Vector{Float64};
-                               verbose::Bool=false)
-    status = check_initialized(solver)
-    if status != 0
-        return status
-    end
-    _validate_library()
-
-    # Convert to Int32 for C interface
-    Acu_i32 = Int32.(Acu)
-    qcu_i32 = Int32.(qcu)
-    Acx_i32 = Int32.(Acx)
-    qcx_i32 = Int32.(qcx)
-
-    status = ccall((:set_cone_constraints, lib_path), Int32,
-                   (Ptr{Int32}, Int32,             # Acu
-                    Ptr{Int32}, Int32,             # qcu
-                    Ptr{Float64}, Int32,           # cu
-                    Ptr{Int32}, Int32,             # Acx
-                    Ptr{Int32}, Int32,             # qcx
-                    Ptr{Float64}, Int32,           # cx
-                    Int32),                        # verbose
-                   Acu_i32, length(Acu_i32),
-                   qcu_i32, length(qcu_i32),
-                   cu, length(cu),
-                   Acx_i32, length(Acx_i32),
-                   qcx_i32, length(qcx_i32),
-                   cx, length(cx),
-                   verbose ? 1 : 0)
-
-    if status != 0
-        error("Failed to set cone constraints with status: $status")
-    end
-    return status
-end
-
-"""
-    set_linear_constraints!(solver, Alin_x, blin_x, Alin_u, blin_u; verbose=false)
-
-Set linear constraints of the form `Alin_x * x ≤ blin_x` and `Alin_u * u ≤ blin_u`.
-"""
-function set_linear_constraints!(solver::TinyMPCSolver,
-                                 Alin_x::Matrix{Float64}, blin_x::Vector{Float64},
-                                 Alin_u::Matrix{Float64}, blin_u::Vector{Float64};
-                                 verbose::Bool=false)
-    status = check_initialized(solver)
-    if status != 0
-        return status
-    end
-    _validate_library()
-
-    status = ccall((:set_linear_constraints, lib_path), Int32,
-                   (Ptr{Float64}, Int32, Int32,   # Alin_x
-                    Ptr{Float64}, Int32,         # blin_x
-                    Ptr{Float64}, Int32, Int32,  # Alin_u
-                    Ptr{Float64}, Int32,         # blin_u
-                    Int32),                      # verbose
-                   Alin_x, size(Alin_x,1), size(Alin_x,2),
-                   blin_x, length(blin_x),
-                   Alin_u, size(Alin_u,1), size(Alin_u,2),
-                   blin_u, length(blin_u),
-                   verbose ? 1 : 0)
-    if status != 0
-        error("Failed to set linear constraints with status: $status")
-    end
-    return status
-end
 
 # ------------------ Settings Update ------------------
 """
     update_settings!(solver; kwargs...)
 
 Update solver settings at runtime (abs_pri_tol, abs_dua_tol, max_iter, etc.).
-Supported keyword arguments mirror the TinySettings struct.
+Supported keyword arguments match Python/MATLAB interface.
+
+# Arguments
+- `abs_pri_tol`: Solution tolerance for primal variables
+- `abs_dua_tol`: Solution tolerance for dual variables  
+- `max_iter`: Maximum number of iterations before returning
+- `check_termination`: Number of iterations to skip before checking termination
+- `en_state_bound`: Enable or disable bound constraints on state
+- `en_input_bound`: Enable or disable bound constraints on input
+- `adaptive_rho`: Enable adaptive rho (logical)
+- `adaptive_rho_min`: Minimum rho value (positive scalar)
+- `adaptive_rho_max`: Maximum rho value (positive scalar)
+- `adaptive_rho_enable_clipping`: Enable rho clipping (logical)
 """
 function update_settings!(solver::TinyMPCSolver; kwargs...)
     status = check_initialized(solver)
     if status != 0
         error("Solver not initialized. Call setup!() first.")
     end
-    _validate_library()
+    _ensure_library_loaded()
 
-    # Extract settings with defaults (use nothing if not provided)
-    abs_pri_tol       = Float64(get(kwargs, :abs_pri_tol, 0.0))
-    abs_dua_tol       = Float64(get(kwargs, :abs_dua_tol, 0.0))
-    max_iter          = Int(get(kwargs, :max_iter, 0))
-    check_termination = Int(get(kwargs, :check_termination, 5))
-    en_state_bound    = Int(get(kwargs, :en_state_bound, 0))
-    en_input_bound    = Int(get(kwargs, :en_input_bound, 0))
-    en_state_soc      = Int(get(kwargs, :en_state_soc, 0))
-    en_input_soc      = Int(get(kwargs, :en_input_soc, 0))
-    en_state_linear   = Int(get(kwargs, :en_state_linear, 0))
-    en_input_linear   = Int(get(kwargs, :en_input_linear, 0))
+    # Extract settings with defaults - only update provided settings
+    abs_pri_tol       = haskey(kwargs, :abs_pri_tol) ? Float64(kwargs[:abs_pri_tol]) : 0.0
+    abs_dua_tol       = haskey(kwargs, :abs_dua_tol) ? Float64(kwargs[:abs_dua_tol]) : 0.0
+    max_iter          = haskey(kwargs, :max_iter) ? Int32(kwargs[:max_iter]) : 0
+    check_termination = haskey(kwargs, :check_termination) ? Int32(kwargs[:check_termination]) : 0
+    en_state_bound    = haskey(kwargs, :en_state_bound) ? Int32(kwargs[:en_state_bound] ? 1 : 0) : 1
+    en_input_bound    = haskey(kwargs, :en_input_bound) ? Int32(kwargs[:en_input_bound] ? 1 : 0) : 1
+    en_state_soc      = haskey(kwargs, :en_state_soc) ? Int32(kwargs[:en_state_soc] ? 1 : 0) : 0
+    en_input_soc      = haskey(kwargs, :en_input_soc) ? Int32(kwargs[:en_input_soc] ? 1 : 0) : 0
+    en_state_linear   = haskey(kwargs, :en_state_linear) ? Int32(kwargs[:en_state_linear] ? 1 : 0) : 0
+    en_input_linear   = haskey(kwargs, :en_input_linear) ? Int32(kwargs[:en_input_linear] ? 1 : 0) : 0
+    adaptive_rho      = haskey(kwargs, :adaptive_rho) ? Int32(kwargs[:adaptive_rho] ? 1 : 0) : 0
+    adaptive_rho_min  = haskey(kwargs, :adaptive_rho_min) ? Float64(kwargs[:adaptive_rho_min]) : 0.0
+    adaptive_rho_max  = haskey(kwargs, :adaptive_rho_max) ? Float64(kwargs[:adaptive_rho_max]) : 0.0
+    adaptive_rho_enable_clipping = haskey(kwargs, :adaptive_rho_enable_clipping) ? Int32(kwargs[:adaptive_rho_enable_clipping] ? 1 : 0) : 1
+    verbose_setting   = haskey(kwargs, :verbose) ? Int32(kwargs[:verbose] ? 1 : 0) : 0
 
-    status = ccall((:update_settings, lib_path), Int32,
-                   (Float64, Float64, Int32, Int32, Int32, Int32, Int32, Int32, Int32, Int32, Int32),
+    # Call the updated C++ function with all parameters including adaptive rho
+    status = ccall((:update_settings, _get_lib_path()), Int32,
+                   (Float64, Float64, Int32, Int32, Int32, Int32, Int32, Int32, Int32, Int32, Int32, Float64, Float64, Int32, Int32),
                    abs_pri_tol, abs_dua_tol, max_iter, check_termination,
-                   en_state_bound, en_input_bound,
-                   en_state_soc, en_input_soc,
-                   en_state_linear, en_input_linear,
-                   0)  # verbose disabled for now
+                   en_state_bound, en_input_bound, en_state_soc, en_input_soc,
+                   en_state_linear, en_input_linear, adaptive_rho,
+                   adaptive_rho_min, adaptive_rho_max, adaptive_rho_enable_clipping, verbose_setting)
+                   
+    if status != 0
+        error("Failed to update settings with status: $status")
+    end
+    
     return status
 end
 
+"""
+    print_problem_data(solver)
+
+Print detailed solver information including solution, cache, settings, and workspace data.
+Matches the Python/MATLAB debug output format.
+"""
+function print_problem_data(solver::TinyMPCSolver)
+    status = check_initialized(solver)
+    if status != 0
+        error("Solver not initialized. Call setup!() first.")
+    end
+    _ensure_library_loaded()
+
+    # Call the C++ function to print debug information  
+    ccall((:print_problem_data, _get_lib_path()), Cvoid, ())
+    
+    return nothing
+end
+
 # ------------------ Cache & Sensitivity ------------------
-const _sensitivity_store = Dict{Symbol,Any}()
 
 """
     compute_cache_terms(solver, A, B, Q, R; rho=1.0)
@@ -602,48 +585,52 @@ function compute_cache_terms(solver::TinyMPCSolver,
 end
 
 """
-    set_sensitivity_matrices!(solver, dK, dP, dC1, dC2)
+    set_sensitivity_matrices!(solver, dK, dP, dC1, dC2; verbose=false)
 
-Store sensitivity matrices for later code generation. Currently only stored in Julia layer.
+Set sensitivity matrices for adaptive rho behavior.
+Matches Python/MATLAB set_sensitivity_matrices functionality.
+
+# Arguments
+- `solver`: TinyMPCSolver instance
+- `dK`: Derivative of feedback gain w.r.t. rho (nu x nx)
+- `dP`: Derivative of value function w.r.t. rho (nx x nx)
+- `dC1`: Derivative of first cache matrix w.r.t. rho (nu x nu)
+- `dC2`: Derivative of second cache matrix w.r.t. rho (nx x nx)
+- `verbose`: Print debug information
 """
 function set_sensitivity_matrices!(solver::TinyMPCSolver,
                                    dK::Matrix{Float64}, dP::Matrix{Float64},
-                                   dC1::Matrix{Float64}, dC2::Matrix{Float64})
-    _sensitivity_store[:dK] = dK
-    _sensitivity_store[:dP] = dP
-    _sensitivity_store[:dC1] = dC1
-    _sensitivity_store[:dC2] = dC2
-    return 0
-end
-
-"""
-    codegen_with_sensitivity(solver, output_dir; verbose=false)
-
-Generate C++ code including previously provided sensitivity matrices.
-"""
-function codegen_with_sensitivity(solver::TinyMPCSolver, output_dir::String; verbose::Bool=false)
+                                   dC1::Matrix{Float64}, dC2::Matrix{Float64};
+                                   verbose::Bool=false)
     status = check_initialized(solver)
     if status != 0
         error("Solver not initialized. Call setup!() first.")
     end
-    _validate_library()
+    _ensure_library_loaded()
 
-    dK  = _sensitivity_store[:dK]
-    dP  = _sensitivity_store[:dP]
-    dC1 = _sensitivity_store[:dC1]
-    dC2 = _sensitivity_store[:dC2]
-    if any(x->x===nothing, (dK,dP,dC1,dC2))
-        error("Sensitivity matrices not set. Call set_sensitivity_matrices! first.")
+    # Validate dimensions
+    nx, nu = solver.nx[], solver.nu[]
+    
+    if size(dK) != (nu, nx)
+        error("dK must have size ($nu, $nx), got $(size(dK))")
+    end
+    if size(dP) != (nx, nx)
+        error("dP must have size ($nx, $nx), got $(size(dP))")
+    end
+    if size(dC1) != (nu, nu)
+        error("dC1 must have size ($nu, $nu), got $(size(dC1))")
+    end
+    if size(dC2) != (nx, nx)
+        error("dC2 must have size ($nx, $nx), got $(size(dC2))")
     end
 
-    status = ccall((:codegen_with_sensitivity, lib_path), Int32,
-                   (Cstring,
-                    Ptr{Float64}, Int32, Int32,
-                    Ptr{Float64}, Int32, Int32,
-                    Ptr{Float64}, Int32, Int32,
-                    Ptr{Float64}, Int32, Int32,
-                    Int32),
-                   output_dir,
+    # Call C++ function to set sensitivity matrices
+    status = ccall((:set_sensitivity_matrices, _get_lib_path()), Int32,
+                   (Ptr{Float64}, Int32, Int32,  # dK
+                    Ptr{Float64}, Int32, Int32,  # dP
+                    Ptr{Float64}, Int32, Int32,  # dC1
+                    Ptr{Float64}, Int32, Int32,  # dC2
+                    Int32),                      # verbose
                    dK, size(dK,1), size(dK,2),
                    dP, size(dP,1), size(dP,2),
                    dC1, size(dC1,1), size(dC1,2),
@@ -651,29 +638,216 @@ function codegen_with_sensitivity(solver::TinyMPCSolver, output_dir::String; ver
                    verbose ? 1 : 0)
 
     if status != 0
-        error("Code generation with sensitivity failed with status: $status")
+        error("Failed to set sensitivity matrices with status: $status")
     end
 
-    _copy_build_artifacts(output_dir)
-    
+    if verbose
+        println("Sensitivity matrices set with norms: dK=$(norm(dK):.6f), dP=$(norm(dP):.6f), dC1=$(norm(dC1):.6f), dC2=$(norm(dC2):.6f)")
+    end
+
+    # Also store in Julia for compatibility  
+    state = _init_runtime_state()
+    state[:sensitivity_store][:dK] = dK
+    state[:sensitivity_store][:dP] = dP
+    state[:sensitivity_store][:dC1] = dC1
+    state[:sensitivity_store][:dC2] = dC2
+
     return status
 end
 
-# ------------------ Reset ------------------
 """
-    reset!(solver)
+    set_cache_terms!(solver, Kinf, Pinf, Quu_inv, AmBKt; verbose=false)
 
-Free solver memory and mark as uninitialized.
+Set cache terms directly in the C++ solver for manual cache control.
+Matches Python/MATLAB set_cache_terms functionality.
+
+# Arguments
+- `solver`: TinyMPCSolver instance
+- `Kinf`: Infinite horizon feedback gain (nu x nx)
+- `Pinf`: Infinite horizon value function (nx x nx)
+- `Quu_inv`: Inverse of Quu matrix (nu x nu)
+- `AmBKt`: Transpose of (A - B*K) (nx x nx)
+- `verbose`: Print debug information
 """
-function reset!(solver::TinyMPCSolver)
-    try
-        ccall((:cleanup_solver, lib_path), Cvoid, ())
-    catch
-        # ignore errors
+function set_cache_terms!(solver::TinyMPCSolver,
+                          Kinf::Matrix{Float64}, Pinf::Matrix{Float64},
+                          Quu_inv::Matrix{Float64}, AmBKt::Matrix{Float64};
+                          verbose::Bool=false)
+    status = check_initialized(solver)
+    if status != 0
+        error("Solver not initialized. Call setup!() first.")
     end
-    solver.is_initialized[] = false
-    return nothing
+    _ensure_library_loaded()
+
+    # Validate dimensions
+    nx, nu = solver.nx[], solver.nu[]
+    
+    if size(Kinf) != (nu, nx)
+        error("Kinf must have size ($nu, $nx), got $(size(Kinf))")
+    end
+    if size(Pinf) != (nx, nx)
+        error("Pinf must have size ($nx, $nx), got $(size(Pinf))")
+    end
+    if size(Quu_inv) != (nu, nu)
+        error("Quu_inv must have size ($nu, $nu), got $(size(Quu_inv))")
+    end
+    if size(AmBKt) != (nx, nx)
+        error("AmBKt must have size ($nx, $nx), got $(size(AmBKt))")
+    end
+
+    # Call C++ function to set cache terms directly in solver
+    status = ccall((:set_cache_terms, _get_lib_path()), Int32,
+                   (Ptr{Float64}, Int32, Int32,  # Kinf
+                    Ptr{Float64}, Int32, Int32,  # Pinf
+                    Ptr{Float64}, Int32, Int32,  # Quu_inv
+                    Ptr{Float64}, Int32, Int32,  # AmBKt
+                    Int32),                      # verbose
+                   Kinf, size(Kinf,1), size(Kinf,2),
+                   Pinf, size(Pinf,1), size(Pinf,2),
+                   Quu_inv, size(Quu_inv,1), size(Quu_inv,2),
+                   AmBKt, size(AmBKt,1), size(AmBKt,2),
+                   verbose ? 1 : 0)
+
+    if status != 0
+        error("Failed to set cache terms with status: $status")
+    end
+
+    if verbose
+        println("Cache terms set with norms: Kinf=$(norm(Kinf):.6f), Pinf=$(norm(Pinf):.6f)")
+        println("C1=$(norm(Quu_inv):.6f), C2=$(norm(AmBKt):.6f)")
+    end
+
+    # Also store in Julia for compatibility
+    state = _init_runtime_state()
+    state[:sensitivity_store][:Kinf] = Kinf
+    state[:sensitivity_store][:Pinf] = Pinf
+    state[:sensitivity_store][:Quu_inv] = Quu_inv
+    state[:sensitivity_store][:AmBKt] = AmBKt
+
+    return status
 end
+
+"""
+    compute_sensitivity_autograd(solver, A, B, Q, R, rho)
+
+Compute sensitivity matrices dK, dP, dC1, dC2 with respect to rho using ForwardDiff.jl.
+Matches Python autograd and MATLAB symbolic differentiation functionality.
+
+# Arguments
+- `solver`: TinyMPCSolver instance (for dimensions)
+- `A`: State transition matrix (nx x nx)
+- `B`: Control matrix (nx x nu)
+- `Q`: State cost matrix (nx x nx)
+- `R`: Input cost matrix (nu x nu)
+- `rho`: Current rho value for differentiation
+
+# Returns
+Tuple (dK, dP, dC1, dC2) of sensitivity matrices
+"""
+function compute_sensitivity_autograd(solver::TinyMPCSolver,
+                                     A::Matrix{Float64}, B::Matrix{Float64},
+                                     Q::Matrix{Float64}, R::Matrix{Float64},
+                                     rho::Float64)
+    status = check_initialized(solver)
+    if status != 0
+        error("Solver not initialized. Call setup!() first.")
+    end
+
+    nx, nu = solver.nx[], solver.nu[]
+    
+    # Define cache computation function for differentiation
+    function compute_cache_matrices(ρ::T) where T
+        Q_rho = Q + ρ * I(nx)
+        R_rho = R + ρ * I(nu)
+        
+        # Initialize matrices with proper type for ForwardDiff
+        Kinf = zeros(T, nu, nx)
+        Pinf = convert(Matrix{T}, Q)
+        
+        # Solve discrete-time algebraic Riccati equation iteratively
+        for _ in 1:1000
+            Kprev = copy(Kinf)
+            BtPinfB = B' * Pinf * B
+            Quu_inv = inv(R_rho + BtPinfB + 1e-8*I(nu))
+            Kinf = Quu_inv * (B' * Pinf * A)
+            Pinf = Q_rho + A' * Pinf * (A - B * Kinf)
+            
+            if norm(Kinf - Kprev) < 1e-12
+                break
+            end
+        end
+        
+        AmBKt = (A - B * Kinf)'
+        Quu_inv = inv(R_rho + B' * Pinf * B)
+        
+        return Kinf, Pinf, Quu_inv, AmBKt
+    end
+    
+    # Compute derivatives using ForwardDiff
+    dK = ForwardDiff.derivative(ρ -> compute_cache_matrices(ρ)[1], rho)
+    dP = ForwardDiff.derivative(ρ -> compute_cache_matrices(ρ)[2], rho) 
+    dC1 = ForwardDiff.derivative(ρ -> compute_cache_matrices(ρ)[3], rho)
+    dC2 = ForwardDiff.derivative(ρ -> compute_cache_matrices(ρ)[4], rho)
+    
+    return (dK, dP, dC1, dC2)
+end
+
+"""
+    codegen_with_sensitivity(solver, output_dir, dK, dP, dC1, dC2; verbose=false)
+
+Generate standalone C++ code with sensitivity matrices for adaptive rho.
+Matches Python/MATLAB codegen_with_sensitivity functionality.
+
+# Arguments
+- `solver`: TinyMPCSolver instance
+- `output_dir`: Directory to write generated code
+- `dK`: Derivative of feedback gain w.r.t. rho (nu x nx)
+- `dP`: Derivative of value function w.r.t. rho (nx x nx)
+- `dC1`: Derivative of first cache matrix w.r.t. rho (nu x nu)
+- `dC2`: Derivative of second cache matrix w.r.t. rho (nx x nx)
+- `verbose`: Print generation details
+"""
+function codegen_with_sensitivity(solver::TinyMPCSolver,
+                                  output_dir::String,
+                                  dK::Matrix{Float64}, dP::Matrix{Float64},
+                                  dC1::Matrix{Float64}, dC2::Matrix{Float64};
+                                  verbose::Bool=false)
+    status = check_initialized(solver)
+    if status != 0
+        error("Solver not initialized. Call setup!() first.")
+    end
+    _ensure_library_loaded()
+
+    # Set sensitivity matrices in the solver first
+    set_sensitivity_matrices!(solver, dK, dP, dC1, dC2; verbose=verbose)
+
+    # Call C++ function for code generation with sensitivity
+    status = ccall((:codegen_with_sensitivity, _get_lib_path()), Int32,
+                   (Cstring, Ptr{Float64}, Int32, Int32,
+                    Ptr{Float64}, Int32, Int32,
+                    Ptr{Float64}, Int32, Int32,
+                    Ptr{Float64}, Int32, Int32,
+                    Int32),
+                   output_dir,
+                   dK, size(dK, 1), size(dK, 2),
+                   dP, size(dP, 1), size(dP, 2),
+                   dC1, size(dC1, 1), size(dC1, 2),
+                   dC2, size(dC2, 1), size(dC2, 2),
+                   verbose ? 1 : 0)
+
+    if status == 0
+        _copy_build_artifacts(output_dir)
+        if verbose
+            println("Code generation with sensitivity completed successfully in $output_dir")
+        end
+    else
+        error("Code generation with sensitivity failed with status: $status")
+    end
+
+    return status
+end
+
+
 
 # Helper function to check if solver is initialized
 function check_initialized(solver::TinyMPCSolver)
@@ -686,7 +860,7 @@ end
 # Cleanup function (called automatically)
 function cleanup()
     try
-        ccall((:cleanup_solver, lib_path), Cvoid, ())
+        ccall((:cleanup_solver, _get_lib_path()), Cvoid, ())
     catch
         # Ignore cleanup errors
     end

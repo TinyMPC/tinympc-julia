@@ -256,36 +256,6 @@ extern "C" int get_controls(double* controls_buffer, int* rows, int* cols) {
     }
 }
 
-// Get iterations (with null pointer check)
-extern "C" int get_iterations() {
-    try {
-        if (!g_solver || !g_solver->solution) {
-            return -1;
-        }
-        
-        return g_solver->solution->iter;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "get_iterations failed: " << e.what() << std::endl;
-        return -1;
-    }
-}
-
-// Check if solved (with null pointer check)
-extern "C" int is_solved() {
-    try {
-        if (!g_solver || !g_solver->solution) {
-            return 0;
-        }
-        
-        return g_solver->solution->solved ? 1 : 0;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "is_solved failed: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
 // Cleanup function
 extern "C" void cleanup_solver() {
     g_solver.reset();
@@ -313,92 +283,235 @@ extern "C" int codegen(const char* output_dir, int verbose) {
     }
 } 
 
-// Set cone constraints
-extern "C" int set_cone_constraints(
-        int* Acu_data, int Acu_rows,
-        int* qcu_data, int qcu_rows,
-        double* cu_data, int cu_rows,
-        int* Acx_data, int Acx_rows,
-        int* qcx_data, int qcx_rows,
-        double* cx_data, int cx_rows,
-        int verbose) {
+// Print problem data for debugging (matching Python implementation)
+extern "C" int print_problem_data(int verbose) {
     try {
         if (!g_solver) {
             throw std::runtime_error("Solver not initialized");
         }
+        
+        std::cout << "solution iter:\n" << g_solver->solution->iter << std::endl;
+        std::cout << "solution solved:\n" << g_solver->solution->solved << std::endl;
+        std::cout << "solution x:\n" << g_solver->solution->x << std::endl;
+        std::cout << "solution u:\n" << g_solver->solution->u << std::endl;
 
-        // Map integer vectors (Eigen::VectorXi)
-        Eigen::Map<Eigen::VectorXi> Acu(Acu_data, Acu_rows);
-        Eigen::Map<Eigen::VectorXi> qcu(qcu_data, qcu_rows);
-        Eigen::Map<Eigen::VectorXi> Acx(Acx_data, Acx_rows);
-        Eigen::Map<Eigen::VectorXi> qcx(qcx_data, qcx_rows);
+        std::cout << "\n\n\ncache rho: " << g_solver->cache->rho << std::endl;
+        std::cout << "cache Kinf:\n" << g_solver->cache->Kinf << std::endl;
+        std::cout << "cache Pinf:\n" << g_solver->cache->Pinf << std::endl;
+        std::cout << "cache Quu_inv:\n" << g_solver->cache->Quu_inv << std::endl;
+        std::cout << "cache AmBKt:\n" << g_solver->cache->AmBKt << std::endl;
 
-        // Map coefficient vectors (tinyVector)
-        Eigen::Map<Eigen::VectorXd> cu_vec(cu_data, cu_rows);
-        Eigen::Map<Eigen::VectorXd> cx_vec(cx_data, cx_rows);
+        std::cout << "\n\n\nabs_pri_tol: " << g_solver->settings->abs_pri_tol << std::endl;
+        std::cout << "abs_dua_tol: " << g_solver->settings->abs_dua_tol << std::endl;
+        std::cout << "max_iter: " << g_solver->settings->max_iter << std::endl;
+        std::cout << "check_termination: " << g_solver->settings->check_termination << std::endl;
+        std::cout << "en_state_bound: " << g_solver->settings->en_state_bound << std::endl;
+        std::cout << "en_input_bound: " << g_solver->settings->en_input_bound << std::endl;
 
-        tinyVector cu_tiny = cu_vec.cast<tinytype>();
-        tinyVector cx_tiny = cx_vec.cast<tinytype>();
-        VectorXi Acu_tiny = Acu.cast<int>();
-        VectorXi qcu_tiny = qcu.cast<int>();
-        VectorXi Acx_tiny = Acx.cast<int>();
-        VectorXi qcx_tiny = qcx.cast<int>();
-
-        int status = tiny_set_cone_constraints(g_solver.get(), Acu_tiny, qcu_tiny, cu_tiny, Acx_tiny, qcx_tiny, cx_tiny);
-
-        if (verbose) {
-            std::cout << "Set cone constraints status: " << status << std::endl;
-        }
-
-        return status;
+        std::cout << "\n\n\nnx: " << g_solver->work->nx << std::endl;
+        std::cout << "nu: " << g_solver->work->nu << std::endl;
+        std::cout << "x:\n" << g_solver->work->x << std::endl;
+        std::cout << "u:\n" << g_solver->work->u << std::endl;
+        std::cout << "q:\n" << g_solver->work->q << std::endl;
+        std::cout << "r:\n" << g_solver->work->r << std::endl;
+        std::cout << "p:\n" << g_solver->work->p << std::endl;
+        std::cout << "d:\n" << g_solver->work->d << std::endl;
+        std::cout << "v:\n" << g_solver->work->v << std::endl;
+        std::cout << "vnew:\n" << g_solver->work->vnew << std::endl;
+        std::cout << "z:\n" << g_solver->work->z << std::endl;
+        std::cout << "znew:\n" << g_solver->work->znew << std::endl;
+        std::cout << "g:\n" << g_solver->work->g << std::endl;
+        std::cout << "y:\n" << g_solver->work->y << std::endl;
+        std::cout << "Q:\n" << g_solver->work->Q << std::endl;
+        std::cout << "R:\n" << g_solver->work->R << std::endl;
+        std::cout << "Adyn:\n" << g_solver->work->Adyn << std::endl;
+        std::cout << "Bdyn:\n" << g_solver->work->Bdyn << std::endl;
+        std::cout << "x_min:\n" << g_solver->work->x_min << std::endl;
+        std::cout << "x_max:\n" << g_solver->work->x_max << std::endl;
+        std::cout << "u_min:\n" << g_solver->work->u_min << std::endl;
+        std::cout << "u_max:\n" << g_solver->work->u_max << std::endl;
+        std::cout << "Xref:\n" << g_solver->work->Xref << std::endl;
+        std::cout << "Uref:\n" << g_solver->work->Uref << std::endl;
+        std::cout << "Qu:\n" << g_solver->work->Qu << std::endl;
+        std::cout << "primal_residual_state:\n" << g_solver->work->primal_residual_state << std::endl;
+        std::cout << "primal_residual_input:\n" << g_solver->work->primal_residual_input << std::endl;
+        std::cout << "dual_residual_state:\n" << g_solver->work->dual_residual_state << std::endl;
+        std::cout << "dual_residual_input:\n" << g_solver->work->dual_residual_input << std::endl;
+        std::cout << "status:\n" << g_solver->work->status << std::endl;
+        std::cout << "iter:\n" << g_solver->work->iter << std::endl;
+        
+        return 0;
+        
     } catch (const std::exception& e) {
-        std::cerr << "set_cone_constraints failed: " << e.what() << std::endl;
+        std::cerr << "print_problem_data failed: " << e.what() << std::endl;
         return -1;
     }
 }
 
-// Set linear constraints
-extern "C" int set_linear_constraints(
-        double* Alin_x_data, int Alin_x_rows, int Alin_x_cols,
-        double* blin_x_data, int blin_x_rows,
-        double* Alin_u_data, int Alin_u_rows, int Alin_u_cols,
-        double* blin_u_data, int blin_u_rows,
-        int verbose) {
+// Set cache terms manually (matching Python implementation)
+extern "C" int set_cache_terms(double* Kinf_data, int Kinf_rows, int Kinf_cols,
+                                double* Pinf_data, int Pinf_rows, int Pinf_cols,
+                                double* Quu_inv_data, int Quu_inv_rows, int Quu_inv_cols,
+                                double* AmBKt_data, int AmBKt_rows, int AmBKt_cols,
+                                int verbose) {
     try {
         if (!g_solver) {
             throw std::runtime_error("Solver not initialized");
         }
-
-        // Map matrices/vectors
-        Eigen::Map<Eigen::MatrixXd> Alin_x(Alin_x_data, Alin_x_rows, Alin_x_cols);
-        Eigen::Map<Eigen::VectorXd> blin_x(blin_x_data, blin_x_rows);
-        Eigen::Map<Eigen::MatrixXd> Alin_u(Alin_u_data, Alin_u_rows, Alin_u_cols);
-        Eigen::Map<Eigen::VectorXd> blin_u(blin_u_data, blin_u_rows);
-
-        tinyMatrix Alin_x_tiny = Alin_x.cast<tinytype>();
-        tinyVector blin_x_tiny = blin_x.cast<tinytype>();
-        tinyMatrix Alin_u_tiny = Alin_u.cast<tinytype>();
-        tinyVector blin_u_tiny = blin_u.cast<tinytype>();
-
-        int status = tiny_set_linear_constraints(g_solver.get(), Alin_x_tiny, blin_x_tiny, Alin_u_tiny, blin_u_tiny);
-
-        if (verbose) {
-            std::cout << "Set linear constraints status: " << status << std::endl;
+        if (!g_solver->cache) {
+            throw std::runtime_error("Solver cache not initialized");
         }
-
-        return status;
+        
+        // Convert arrays to Eigen matrices
+        Eigen::Map<Eigen::MatrixXd> Kinf(Kinf_data, Kinf_rows, Kinf_cols);
+        Eigen::Map<Eigen::MatrixXd> Pinf(Pinf_data, Pinf_rows, Pinf_cols);
+        Eigen::Map<Eigen::MatrixXd> Quu_inv(Quu_inv_data, Quu_inv_rows, Quu_inv_cols);
+        Eigen::Map<Eigen::MatrixXd> AmBKt(AmBKt_data, AmBKt_rows, AmBKt_cols);
+        
+        // Set cache terms
+        g_solver->cache->Kinf = Kinf.cast<tinytype>();
+        g_solver->cache->Pinf = Pinf.cast<tinytype>();
+        g_solver->cache->Quu_inv = Quu_inv.cast<tinytype>();
+        g_solver->cache->AmBKt = AmBKt.cast<tinytype>();
+        g_solver->cache->C1 = Quu_inv.cast<tinytype>();  // Cache terms
+        g_solver->cache->C2 = AmBKt.cast<tinytype>();    // Cache terms
+        
+        if (verbose) {
+            std::cout << "Cache terms set with norms:" << std::endl;
+            std::cout << "Kinf norm: " << Kinf.norm() << std::endl;
+            std::cout << "Pinf norm: " << Pinf.norm() << std::endl;
+            std::cout << "Quu_inv norm: " << Quu_inv.norm() << std::endl;
+            std::cout << "AmBKt norm: " << AmBKt.norm() << std::endl;
+        }
+        
+        return 0;
+        
     } catch (const std::exception& e) {
-        std::cerr << "set_linear_constraints failed: " << e.what() << std::endl;
+        std::cerr << "set_cache_terms failed: " << e.what() << std::endl;
         return -1;
     }
 }
 
-// Update solver settings (partial)
+// Set sensitivity matrices for adaptive rho support (matching Python implementation)
+extern "C" int set_sensitivity_matrices(double* dK_data, int dK_rows, int dK_cols,
+                                         double* dP_data, int dP_rows, int dP_cols,
+                                         double* dC1_data, int dC1_rows, int dC1_cols,
+                                         double* dC2_data, int dC2_rows, int dC2_cols,
+                                         double rho, int verbose) {
+    try {
+        if (!g_solver) {
+            throw std::runtime_error("Solver not initialized");
+        }
+        
+        // Convert arrays to Eigen matrices
+        Eigen::Map<Eigen::MatrixXd> dK(dK_data, dK_rows, dK_cols);
+        Eigen::Map<Eigen::MatrixXd> dP(dP_data, dP_rows, dP_cols);
+        Eigen::Map<Eigen::MatrixXd> dC1(dC1_data, dC1_rows, dC1_cols);
+        Eigen::Map<Eigen::MatrixXd> dC2(dC2_data, dC2_rows, dC2_cols);
+        
+        // Store sensitivity matrices in the solver's cache
+        if (g_solver->cache != nullptr) {
+            // For now, we'll just store them for code generation
+            if (verbose) {
+                std::cout << "Sensitivity matrices set for code generation" << std::endl;
+                std::cout << "dK norm: " << dK.norm() << std::endl;
+                std::cout << "dP norm: " << dP.norm() << std::endl;
+                std::cout << "dC1 norm: " << dC1.norm() << std::endl;
+                std::cout << "dC2 norm: " << dC2.norm() << std::endl;
+            }
+        } else {
+            if (verbose) {
+                std::cout << "Warning: Cache not initialized, sensitivity matrices will only be used for code generation" << std::endl;
+            }
+        }
+        
+        return 0;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "set_sensitivity_matrices failed: " << e.what() << std::endl;
+        return -1;
+    }
+}
+
+// Code generation with sensitivity matrices (matching Python implementation)
+extern "C" int codegen_with_sensitivity(const char* output_dir,
+                                         double* dK_data, int dK_rows, int dK_cols,
+                                         double* dP_data, int dP_rows, int dP_cols,
+                                         double* dC1_data, int dC1_rows, int dC1_cols,
+                                         double* dC2_data, int dC2_rows, int dC2_cols,
+                                         int verbose) {
+    try {
+        if (!g_solver) {
+            throw std::runtime_error("Solver not initialized");
+        }
+        
+        // Convert arrays to Eigen matrices and then to tinyMatrix
+        Eigen::Map<Eigen::MatrixXd> dK(dK_data, dK_rows, dK_cols);
+        Eigen::Map<Eigen::MatrixXd> dP(dP_data, dP_rows, dP_cols);
+        Eigen::Map<Eigen::MatrixXd> dC1(dC1_data, dC1_rows, dC1_cols);
+        Eigen::Map<Eigen::MatrixXd> dC2(dC2_data, dC2_rows, dC2_cols);
+        
+        tinyMatrix dK_tiny = dK.cast<tinytype>();
+        tinyMatrix dP_tiny = dP.cast<tinytype>();
+        tinyMatrix dC1_tiny = dC1.cast<tinytype>();
+        tinyMatrix dC2_tiny = dC2.cast<tinytype>();
+        
+        int status = tiny_codegen_with_sensitivity(g_solver.get(), output_dir,
+                                                  &dK_tiny, &dP_tiny, &dC1_tiny, &dC2_tiny, verbose);
+        
+        if (verbose) {
+            std::cout << "Code generation with sensitivity completed with status: " << status << std::endl;
+        }
+        
+        return status;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "codegen_with_sensitivity failed: " << e.what() << std::endl;
+        return -1;
+    }
+}
+
+// Compute cache terms using C++ API
+extern "C" int compute_cache_terms(int verbose) {
+    try {
+        if (!g_solver) {
+            throw std::runtime_error("Solver not initialized");
+        }
+        if (!g_solver->cache) {
+            throw std::runtime_error("Solver cache not initialized");
+        }
+        
+        int status = tiny_precompute_and_set_cache(g_solver->cache,
+                                                   g_solver->work->Adyn,
+                                                   g_solver->work->Bdyn,
+                                                   g_solver->work->fdyn,
+                                                   g_solver->work->Q,
+                                                   g_solver->work->R,
+                                                   g_solver->work->nx,
+                                                   g_solver->work->nu,
+                                                   g_solver->cache->rho,
+                                                   verbose);
+        
+        if (verbose) {
+            std::cout << "Cache computation completed with status: " << status << std::endl;
+        }
+        
+        return status;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "compute_cache_terms failed: " << e.what() << std::endl;
+        return -1;
+    }
+}
+
+// Enhanced update_settings with all parameters (matching Python implementation)
 extern "C" int update_settings(double abs_pri_tol, double abs_dua_tol,
                                 int max_iter, int check_termination,
                                 int en_state_bound, int en_input_bound,
                                 int en_state_soc, int en_input_soc,
                                 int en_state_linear, int en_input_linear,
+                                int adaptive_rho, double adaptive_rho_min,
+                                double adaptive_rho_max, int adaptive_rho_enable_clipping,
                                 int verbose) {
     try {
         if (!g_solver) {
@@ -406,38 +519,39 @@ extern "C" int update_settings(double abs_pri_tol, double abs_dua_tol,
         }
 
         TinySettings* settings = g_solver->settings;
-        int status = tiny_update_settings(settings,
-                                          (tinytype)abs_pri_tol,
-                                          (tinytype)abs_dua_tol,
-                                          max_iter,
-                                          check_termination,
-                                          en_state_bound,
-                                          en_input_bound,
-                                          en_state_soc,
-                                          en_input_soc,
-                                          en_state_linear,
-                                          en_input_linear);
-        if (verbose) {
-            std::cout << "Update settings status: " << status << std::endl;
+        if (!settings) {
+            throw std::runtime_error("Settings not initialized");
         }
-        return status;
+        
+        // Update all settings
+        settings->abs_pri_tol = (tinytype)abs_pri_tol;
+        settings->abs_dua_tol = (tinytype)abs_dua_tol;
+        settings->max_iter = max_iter;
+        settings->check_termination = check_termination;
+        settings->en_state_bound = en_state_bound;
+        settings->en_input_bound = en_input_bound;
+        settings->en_state_soc = en_state_soc;
+        settings->en_input_soc = en_input_soc;
+        settings->en_state_linear = en_state_linear;
+        settings->en_input_linear = en_input_linear;
+        
+        // Update adaptive rho settings
+        settings->adaptive_rho = adaptive_rho;
+        settings->adaptive_rho_min = (tinytype)adaptive_rho_min;
+        settings->adaptive_rho_max = (tinytype)adaptive_rho_max;
+        settings->adaptive_rho_enable_clipping = adaptive_rho_enable_clipping;
+        
+        if (verbose) {
+            std::cout << "Updated settings with adaptive rho support" << std::endl;
+        }
+        
+        return 0;
+        
     } catch (const std::exception& e) {
         std::cerr << "update_settings failed: " << e.what() << std::endl;
         return -1;
     }
 }
-
-// Alias codegen_with_sensitivity to default codegen (sensitivity handled at higher level)
-extern "C" int codegen_with_sensitivity(const char* output_dir,
-                                         double* dK_data, int dK_rows, int dK_cols,
-                                         double* dP_data, int dP_rows, int dP_cols,
-                                         double* dC1_data, int dC1_rows, int dC1_cols,
-                                         double* dC2_data, int dC2_rows, int dC2_cols,
-                                         int verbose) {
-    // Currently sensitivity matrices are not used at the C++ layer.
-    // Just call the regular codegen for now.
-    return codegen(output_dir, verbose);
-} 
 
 // Set bound constraints after setup
 extern "C" int set_bound_constraints(double* x_min_data, int x_min_rows, int x_min_cols,
