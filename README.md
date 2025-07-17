@@ -84,6 +84,7 @@ julia --project=. --compile=min --startup-file=no examples/quadrotor_hover_codeg
 - `cartpole_one_solve_demo.jl`: Single optimal control value and predicted trajectory
 - `cartpole_example_mpc.jl`: 200-step MPC simulation with convergence in 2-7 iterations
 - `cartpole_example_code_generation.jl`: C++ code generated in `examples/out/`
+- `quadrotor_hover_codegen.jl`: C++ code generated in `examples/out/`
 
 ## Running Tests
 
@@ -94,9 +95,6 @@ The test suite verifies all core functionality:
 julia --project=. --compile=min --startup-file=no tests/test_basic.jl
 julia --project=. --compile=min --startup-file=no tests/test_cache.jl
 julia --project=. --compile=min --startup-file=no tests/test_settings.jl
-
-# All basic tests should pass
-# Note: Some advanced tests (sensitivity) currently disabled
 ```
 
 ## Advanced Features
