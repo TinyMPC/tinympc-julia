@@ -76,7 +76,7 @@ julia --project=. --compile=min --startup-file=no examples/cartpole_example_mpc.
 # Code generation
 julia --project=. --compile=min --startup-file=no examples/cartpole_example_code_generation.jl
 
-# Advanced quadrotor example (sensitivity analysis currently disabled)
+# Advanced quadrotor example
 julia --project=. --compile=min --startup-file=no examples/quadrotor_hover_codegen.jl
 ```
 
