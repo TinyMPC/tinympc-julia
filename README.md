@@ -10,33 +10,28 @@ git clone --recurse-submodules https://github.com/TinyMPC/tinympc-julia.git
 cd tinympc-julia
 ```
 
-2. **Build the C++ library:**
+2. **Install and build:**
 ```bash
-# Install dependencies and build the C++ library
-julia --project=. -e "using Pkg; Pkg.instantiate(allow_autoprecomp=false)"
+# Develop the package in Julia
+julia -e "using Pkg; Pkg.develop(PackageSpec(path=\".\"))"
 
-# The C++ library should already be built (libtinympc_jl.so in lib/)
-# If not built, you can build it manually:
-# mkdir build && cd build && cmake .. && make
+# Build the C++ library (automatically runs deps/build.jl)
+julia -e "using Pkg; Pkg.build()"
+
+# Or build manually if needed:
+# julia deps/build.jl
 ```
 
 3. **Verify installation:**
 ```bash
 # Test that the module loads correctly
-julia --project=. --compile=min --startup-file=no -e "
-include(\"src/TinyMPC.jl\"); using .TinyMPC; 
-solver = TinyMPCSolver(); 
-println(\"✅ TinyMPC.jl ready to use!\")"
+julia -e "using TinyMPC; solver = TinyMPCSolver(); println(\"✅ TinyMPC.jl ready to use!\")"
 ```
 
 ## Basic Usage
 
-**Note**: Due to Julia precompilation issues, use direct `include` instead of `using TinyMPC`:
-
 ```julia
-# Load the module (use this approach in all scripts)
-include("src/TinyMPC.jl")  # or path to TinyMPC.jl
-using .TinyMPC
+using TinyMPC
 using LinearAlgebra
 
 # System matrices (cartpole example)
@@ -189,5 +184,5 @@ All parameters supported by Python/MATLAB wrappers:
 
 ### Build Requirements
 - CMake ≥ 3.10
-- C++ compiler with C++17 support  
+- C++ compiler with C++17 support (GCC, Clang, or Apple Clang)
 - Git (for submodules)

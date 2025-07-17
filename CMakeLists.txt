@@ -11,9 +11,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # Find Julia package
 find_package(Julia REQUIRED)
 
-# Find Eigen
-find_package(Eigen3 3.3 REQUIRED)
-
 # Check if TinyMPC submodule exists
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tinympc/TinyMPC/CMakeLists.txt")
     message(FATAL_ERROR "TinyMPC submodule not found. Please clone with --recurse-submodules or run 'git submodule update --init --recursive'")
@@ -32,7 +29,6 @@ add_library(tinympc_jl SHARED src/bindings.cpp)
 
 target_include_directories(tinympc_jl PRIVATE
     ${JULIA_INCLUDE_DIR}
-    ${EIGEN3_INCLUDE_DIR}
     "${CMAKE_CURRENT_SOURCE_DIR}/tinympc/TinyMPC/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinympc/TinyMPC/src"
 )
