@@ -642,7 +642,7 @@ function set_sensitivity_matrices!(solver::TinyMPCSolver,
     end
 
     if verbose
-        println("Sensitivity matrices set with norms: dK=$(norm(dK):.6f), dP=$(norm(dP):.6f), dC1=$(norm(dC1):.6f), dC2=$(norm(dC2):.6f)")
+        println("Sensitivity matrices set with norms: dK=$(round(norm(dK), digits=6)), dP=$(round(norm(dP), digits=6)), dC1=$(round(norm(dC1), digits=6)), dC2=$(round(norm(dC2), digits=6))")
     end
 
     # Also store in Julia for compatibility  

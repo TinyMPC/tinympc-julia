@@ -1,20 +1,17 @@
-###############################################################################
-# Quadrotor Hover Code Generation Example (Julia)
-# Generates C/C++ code for a 12-state quadrotor hover MPC problem, optionally
-# including sensitivity matrices for adaptive-rho schemes.
-#
-# This is the Julia counterpart of MATLAB's quadrotor_hover_code_generation.m
-# example.  It demonstrates:
-#   • Setting up a TinyMPC solver for a 12×4 system
-#   • Computing cache terms and numerical sensitivities w.r.t. ρ (rho)
-#   • Passing those sensitivities to TinyMPC and invoking code generation
-#   • Verifying that the generated code compiles via CMake (see comments)
-###############################################################################
+#!/usr/bin/env julia
+# Quadrotor hover with sensitivity-enabled code generation
+# Matches Python/MATLAB quadrotor examples by computing ∂{K,P,C1,C2}/∂ρ
+# then generating C++ code with these sensitivity matrices.
 
-using TinyMPC
-using LinearAlgebra
 using ForwardDiff
-using Printf
+using LinearAlgebra
+using Random
+
+Random.seed!(1)
+
+# Load TinyMPC
+include("../src/TinyMPC.jl")
+using .TinyMPC
 
 # ------------------------- Problem definition --------------------------------
 # We keep parameters local to avoid constant re-definitions when this file is
@@ -100,7 +97,7 @@ function main()
     # 4) Code generation + artifact copy
     out_dir = joinpath(@__DIR__, "out")
     mkpath(out_dir)
-    codegen_with_sensitivity(solver, out_dir, verbose=true)
+    codegen_with_sensitivity(solver, out_dir, dK, dP, dC1, dC2; verbose=true)
     println("\n🎉  Code-generation complete.  Output directory: $(out_dir)")
     println("   To compile:  cd $(out_dir); cmake . && make -j$(Sys.CPU_THREADS)\n")
 end

@@ -3,7 +3,8 @@
 # Simulates the cart-pole using TinyMPC and creates a quick animation of the
 # resulting motion.  The animation is saved as GIF next to this script.
 
-using TinyMPC
+include("../src/TinyMPC.jl")
+using .TinyMPC
 using LinearAlgebra
 using Plots
 
@@ -71,6 +72,6 @@ function animate_cart(xs)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    xs = simulate_cart(; steps=60)
+    xs = simulate_cartpole(; steps=60)
     animate_cart(xs)
 end 
