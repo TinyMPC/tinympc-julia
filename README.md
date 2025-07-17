@@ -1,17 +1,8 @@
 # TinyMPC Julia Interface
 
-Julia wrapper for [TinyMPC](https://tinympc.org/), a lightweight model-predictive control solver. This package provides a Julia interface to the C++ TinyMPC library with full feature parity with Python and MATLAB wrappers.
+Julia wrapper for [TinyMPC](https://tinympc.org/). Supports code generation and interaction with the C/C++ backend. Tested on Ubuntu and macOS.
 
-## Features
-
-✅ **Core MPC functionality**: Setup, solve, get solutions  
-✅ **Advanced features**: Cache computation, sensitivity analysis, adaptive rho  
-✅ **Code generation**: Export to standalone C++ code  
-✅ **Constraints**: State and input bounds  
-✅ **Reference tracking**: State and input trajectories  
-✅ **ForwardDiff.jl integration**: Automatic differentiation for sensitivity analysis  
-
-## Installation and Building
+## Building
 
 1. **Clone with submodules:**
 ```bash
@@ -189,18 +180,6 @@ All parameters supported by Python/MATLAB wrappers:
 - `adaptive_rho`, `adaptive_rho_min`, `adaptive_rho_max` - Adaptive rho settings
 - `verbose` - Enable verbose output
 
-## Known Issues and Workarounds
-
-### Precompilation Issue
-- **Issue**: Julia package precompilation fails with "Number of elements must be non-negative" error
-- **Workaround**: Use `include("src/TinyMPC.jl"); using .TinyMPC` instead of `using TinyMPC`
-- **Impact**: All functionality works perfectly, just requires direct include
-
-### ForwardDiff Sensitivity Analysis  
-- **Status**: Temporarily disabled due to precompilation issues
-- **Workaround**: Use numerical finite differences or Python/MATLAB for sensitivity analysis
-- **Future**: Will be re-enabled once precompilation issues are resolved
-
 ## Dependencies
 
 ### Required
@@ -212,50 +191,3 @@ All parameters supported by Python/MATLAB wrappers:
 - CMake ≥ 3.10
 - C++ compiler with C++17 support  
 - Git (for submodules)
-
-## Performance
-
-- **Setup**: Fast matrix conversion and initialization
-- **Solve**: Typically 2-7 iterations for cartpole, up to 50 for complex problems  
-- **Memory**: Efficient with minimal allocations
-- **Scaling**: Handles systems up to ~100 states effectively
-
-## Troubleshooting
-
-### Build Issues
-```bash
-# If library missing, rebuild manually
-cd tinympc-julia
-mkdir -p build && cd build
-cmake .. && make
-```
-
-### Module Loading Issues
-```bash
-# Always use the direct include approach
-julia --project=. --compile=min --startup-file=no -e "
-include(\"src/TinyMPC.jl\"); using .TinyMPC"
-```
-
-### Solver Issues
-- Check matrix dimensions match problem specification
-- Verify constraints are feasible (u_min ≤ u_max)
-- Use `verbose=true` for debugging output
-- Start with simple problems to validate setup
-
-## Contributing
-
-Contributions welcome! Key areas:
-- Fixing precompilation issues
-- Re-enabling ForwardDiff sensitivity analysis  
-- Performance optimizations
-- Additional examples
-- Bug reports with minimal reproducible examples
-
-## License
-
-MIT License (same as TinyMPC)
-
----
-
-**Production ready** | Works via direct include | All core features functional | Fast and reliable MPC solver for Julia
