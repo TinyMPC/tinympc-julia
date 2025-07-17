@@ -1,5 +1,4 @@
-include("../src/TinyMPC.jl")
-using .TinyMPC
+using TinyMPC
 using Test
 using LinearAlgebra
 

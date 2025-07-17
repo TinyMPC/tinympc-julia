@@ -500,17 +500,17 @@ function update_settings!(solver::TinyMPCSolver; kwargs...)
     abs_dua_tol       = haskey(kwargs, :abs_dua_tol) ? Float64(kwargs[:abs_dua_tol]) : 0.0
     max_iter          = haskey(kwargs, :max_iter) ? Int32(kwargs[:max_iter]) : 0
     check_termination = haskey(kwargs, :check_termination) ? Int32(kwargs[:check_termination]) : 0
-    en_state_bound    = haskey(kwargs, :en_state_bound) ? Int32(kwargs[:en_state_bound] ? 1 : 0) : 1
-    en_input_bound    = haskey(kwargs, :en_input_bound) ? Int32(kwargs[:en_input_bound] ? 1 : 0) : 1
-    en_state_soc      = haskey(kwargs, :en_state_soc) ? Int32(kwargs[:en_state_soc] ? 1 : 0) : 0
-    en_input_soc      = haskey(kwargs, :en_input_soc) ? Int32(kwargs[:en_input_soc] ? 1 : 0) : 0
-    en_state_linear   = haskey(kwargs, :en_state_linear) ? Int32(kwargs[:en_state_linear] ? 1 : 0) : 0
-    en_input_linear   = haskey(kwargs, :en_input_linear) ? Int32(kwargs[:en_input_linear] ? 1 : 0) : 0
-    adaptive_rho      = haskey(kwargs, :adaptive_rho) ? Int32(kwargs[:adaptive_rho] ? 1 : 0) : 0
+    en_state_bound    = haskey(kwargs, :en_state_bound) ? Int32(Bool(kwargs[:en_state_bound]) ? 1 : 0) : 1
+    en_input_bound    = haskey(kwargs, :en_input_bound) ? Int32(Bool(kwargs[:en_input_bound]) ? 1 : 0) : 1
+    en_state_soc      = haskey(kwargs, :en_state_soc) ? Int32(Bool(kwargs[:en_state_soc]) ? 1 : 0) : 0
+    en_input_soc      = haskey(kwargs, :en_input_soc) ? Int32(Bool(kwargs[:en_input_soc]) ? 1 : 0) : 0
+    en_state_linear   = haskey(kwargs, :en_state_linear) ? Int32(Bool(kwargs[:en_state_linear]) ? 1 : 0) : 0
+    en_input_linear   = haskey(kwargs, :en_input_linear) ? Int32(Bool(kwargs[:en_input_linear]) ? 1 : 0) : 0
+    adaptive_rho      = haskey(kwargs, :adaptive_rho) ? Int32(Bool(kwargs[:adaptive_rho]) ? 1 : 0) : 0
     adaptive_rho_min  = haskey(kwargs, :adaptive_rho_min) ? Float64(kwargs[:adaptive_rho_min]) : 0.0
     adaptive_rho_max  = haskey(kwargs, :adaptive_rho_max) ? Float64(kwargs[:adaptive_rho_max]) : 0.0
-    adaptive_rho_enable_clipping = haskey(kwargs, :adaptive_rho_enable_clipping) ? Int32(kwargs[:adaptive_rho_enable_clipping] ? 1 : 0) : 1
-    verbose_setting   = haskey(kwargs, :verbose) ? Int32(kwargs[:verbose] ? 1 : 0) : 0
+    adaptive_rho_enable_clipping = haskey(kwargs, :adaptive_rho_enable_clipping) ? Int32(Bool(kwargs[:adaptive_rho_enable_clipping]) ? 1 : 0) : 1
+    verbose_setting   = haskey(kwargs, :verbose) ? Int32(Bool(kwargs[:verbose]) ? 1 : 0) : 0
 
     # Call the updated C++ function with all parameters including adaptive rho
     status = ccall((:update_settings, _get_lib_path()), Int32,
