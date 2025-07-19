@@ -1,5 +1,6 @@
 using Test
-using TinyMPC
+include("../src/TinyMPC.jl")
+using .TinyMPC
 using LinearAlgebra
 
 @testset "Cache Functionality" begin
@@ -16,7 +17,7 @@ using LinearAlgebra
     
     @testset "Compute Cache Terms" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Compute cache terms
@@ -43,7 +44,7 @@ using LinearAlgebra
     
     @testset "Set Cache Terms" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Create some test cache matrices
@@ -53,12 +54,12 @@ using LinearAlgebra
         AmBKt = rand(4, 4)
         
         # Set cache terms (should not error)
-        @test_nowarn set_cache_terms!(solver, Kinf, Pinf, Quu_inv, AmBKt, verbose=false)
+        @test_nowarn set_cache_terms(solver, Kinf, Pinf, Quu_inv, AmBKt, verbose=false)
     end
     
     @testset "Cache Term Consistency" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Compute cache terms twice with same parameters

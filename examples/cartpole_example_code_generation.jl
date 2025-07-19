@@ -20,13 +20,13 @@ u_max = fill(0.5, 1, N-1)   # nu x (N-1)
 
 # Create solver and setup with bounds
 solver = TinyMPCSolver()
-status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
+status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
                 u_min=u_min, u_max=u_max, verbose=false)
 @assert status == 0
 
 # Set references (all zeros for code generation)
-set_x_ref!(solver, zeros(4, N))
-set_u_ref!(solver, zeros(1, N-1))
+set_x_ref(solver, zeros(4, N))
+set_u_ref(solver, zeros(1, N-1))
 
 # Generate C++ code to ./out directory
 out_dir = joinpath(@__DIR__, "out")

@@ -1,5 +1,6 @@
 using Test
-using TinyMPC
+include("../src/TinyMPC.jl")
+using .TinyMPC
 using LinearAlgebra
 
 @testset "Sensitivity Functionality" begin
@@ -16,7 +17,7 @@ using LinearAlgebra
     
     @testset "Compute Sensitivity AutoGrad" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Compute sensitivity matrices using automatic differentiation
@@ -43,7 +44,7 @@ using LinearAlgebra
     
     @testset "Set Sensitivity Matrices" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Create test sensitivity matrices
@@ -53,12 +54,12 @@ using LinearAlgebra
         dC2 = rand(4, 4)
         
         # Set sensitivity matrices (should not error)
-        @test_nowarn set_sensitivity_matrices!(solver, dK, dP, dC1, dC2, rho=rho, verbose=false)
+        @test_nowarn set_sensitivity_matrices(solver, dK, dP, dC1, dC2, rho=rho, verbose=false)
     end
     
     @testset "Sensitivity Matrices for Adaptive Rho" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
                        adaptive_rho=true, verbose=false)
         @test status == 0
         
@@ -66,21 +67,21 @@ using LinearAlgebra
         sensitivities = compute_sensitivity_autograd(solver, A, B, Q, R, rho, verbose=false)
         
         # Set them in the solver
-        set_sensitivity_matrices!(solver, sensitivities.dK, sensitivities.dP, 
+        set_sensitivity_matrices(solver, sensitivities.dK, sensitivities.dP, 
                                  sensitivities.dC1, sensitivities.dC2, rho=rho, verbose=false)
         
         # Test that solver still works
-        set_x0!(solver, [0.1, 0.0, 0.0, 0.0])
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x0(solver, [0.1, 0.0, 0.0, 0.0])
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
-        status = solve!(solver)
+        status = solve(solver)
         @test status == 0
     end
     
     @testset "Sensitivity Consistency" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Compute sensitivities twice with same parameters
@@ -96,7 +97,7 @@ using LinearAlgebra
     
     @testset "Different Rho Values" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
         
         # Compute sensitivities for different rho values

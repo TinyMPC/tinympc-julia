@@ -24,18 +24,18 @@ nx, nu = size(A, 1), size(B, 2)
 
 # Create and setup solver
 solver = TinyMPCSolver()
-status = setup!(solver, A, B, zeros(nx), Q, R, rho, nx, nu, N, 
+status = setup(solver, A, B, zeros(nx), Q, R, rho, nx, nu, N, 
                max_iter=10, verbose=false)
 @assert status == 0 "Solver setup failed"
 
 # Initial state disturbance (matching Python example)
 x0 = [0.5, 0.0, 0.0, 0.0]  # Changed to match Python value
-set_x0!(solver, x0)
-set_x_ref!(solver, zeros(nx, N))
-set_u_ref!(solver, zeros(nu, N-1))
+set_x0(solver, x0)
+set_x_ref(solver, zeros(nx, N))
+set_u_ref(solver, zeros(nu, N-1))
 
 # Solve once
-status = solve!(solver)
+status = solve(solver)
 @assert status == 0 "Solve failed"
 
 # Get and display solution

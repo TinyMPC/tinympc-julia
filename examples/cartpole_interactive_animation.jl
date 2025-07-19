@@ -24,9 +24,9 @@ function simulate_cartpole(; steps=100)
 
     nx, nu = size(A,1), size(B,2)
     solver = TinyMPCSolver()
-    setup!(solver, A, B, zeros(nx), Q, R, ρ, nx, nu, N, verbose=false)
-    set_x_ref!(solver, zeros(nx, N))
-    set_u_ref!(solver, zeros(nu, N-1))
+    setup(solver, A, B, zeros(nx), Q, R, ρ, nx, nu, N, verbose=false)
+    set_x_ref(solver, zeros(nx, N))
+    set_u_ref(solver, zeros(nu, N-1))
 
     x = [0.3, 0.0, 0.0, 0.0]   # Initial state
     dt = 0.02                  # Time step for simple Euler integration
@@ -34,8 +34,8 @@ function simulate_cartpole(; steps=100)
     xs = Vector{Vector{Float64}}(undef, steps)
 
     for k in 1:steps
-        set_x0!(solver, x)
-        solve!(solver)
+        set_x0(solver, x)
+        solve(solver)
         u = get_solution(solver).controls[1]
         # Simple discrete update (linear model)
         x = vec(A * x + B * u)

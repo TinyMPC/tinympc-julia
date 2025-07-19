@@ -1,5 +1,6 @@
 using Test
-using TinyMPC
+include("../src/TinyMPC.jl")
+using .TinyMPC
 using LinearAlgebra
 
 @testset "Settings Functionality" begin
@@ -17,26 +18,26 @@ using LinearAlgebra
         solver = TinyMPCSolver()
         
         # Setup with custom tolerance
-        status = setup!(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, 
+        status = setup(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, 
                        abs_pri_tol=5.0, verbose=false)
         @test status == 0
         
         # Test that solve still works with custom settings
-        set_x0!(solver, [0.1, 0.0, 0.0, 0.0])
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x0(solver, [0.1, 0.0, 0.0, 0.0])
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
-        status = solve!(solver)
+        status = solve(solver)
         @test status == 0
     end
     
     @testset "All Settings Parameters" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, verbose=false)
         @test status == 0
         
         # Update all settings
-        @test_nowarn update_settings!(solver,
+        @test_nowarn update_settings(solver,
             abs_pri_tol=1e-4,
             abs_dua_tol=1e-4,
             max_iter=50,
@@ -54,42 +55,42 @@ using LinearAlgebra
             verbose=false)
         
         # Test that solver still works after settings update
-        set_x0!(solver, [0.1, 0.0, 0.0, 0.0])
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x0(solver, [0.1, 0.0, 0.0, 0.0])
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
-        status = solve!(solver)
+        status = solve(solver)
         @test status == 0
     end
     
     @testset "Adaptive Rho Settings" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, 
+        status = setup(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, 
                        adaptive_rho=true, adaptive_rho_min=0.5, adaptive_rho_max=5.0,
                        verbose=false)
         @test status == 0
         
         # Test that solver works with adaptive rho
-        set_x0!(solver, [0.1, 0.0, 0.0, 0.0])
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x0(solver, [0.1, 0.0, 0.0, 0.0])
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
-        status = solve!(solver)
+        status = solve(solver)
         @test status == 0
     end
     
     @testset "Max Iterations Setting" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, 
+        status = setup(solver, A, B, zeros(4), Q, R, 1.0, 4, 1, N, 
                        max_iter=1, verbose=false)  # Very low max_iter
         @test status == 0
         
         # Even with low max_iter, should complete without error
-        set_x0!(solver, [0.1, 0.0, 0.0, 0.0])
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x0(solver, [0.1, 0.0, 0.0, 0.0])
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
-        status = solve!(solver)
+        status = solve(solver)
         # Status might be non-zero due to early termination, but should not crash
         @test status >= 0
     end

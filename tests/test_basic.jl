@@ -1,4 +1,5 @@
-using TinyMPC
+include("../src/TinyMPC.jl")
+using .TinyMPC
 using Test
 using LinearAlgebra
 
@@ -16,24 +17,24 @@ using LinearAlgebra
     
     @testset "Solver Setup" begin
         solver = TinyMPCSolver()
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
     end
     
     @testset "Reference Setting and Solving" begin
         solver = TinyMPCSolver()
-        setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         
         # Set initial state
         x0 = [0.5, 0.0, 0.0, 0.0]
-        set_x0!(solver, x0)
+        set_x0(solver, x0)
         
         # Set references
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
         # Solve
-        status = solve!(solver)
+        status = solve(solver)
         @test status == 0
         
         # Get solution
@@ -48,16 +49,16 @@ using LinearAlgebra
         u_min = fill(-1.0, 1, N-1)
         u_max = fill(1.0, 1, N-1)
         
-        status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
                        u_min=u_min, u_max=u_max, verbose=false)
         @test status == 0
         
         # Verify constraints are respected
-        set_x0!(solver, [1.0, 0.0, 0.0, 0.0])  # Large initial disturbance
-        set_x_ref!(solver, zeros(4, N))
-        set_u_ref!(solver, zeros(1, N-1))
+        set_x0(solver, [1.0, 0.0, 0.0, 0.0])  # Large initial disturbance
+        set_x_ref(solver, zeros(4, N))
+        set_u_ref(solver, zeros(1, N-1))
         
-        status = solve!(solver)
+        status = solve(solver)
         @test status == 0
         
         sol = get_solution(solver)

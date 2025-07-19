@@ -58,41 +58,22 @@ nx = size(A, 1)
 nu = size(B, 2)
 f  = zeros(nx)          # No affine term
 
-# ------------------------- Helper: sensitivities ------------------------------
-"""
-    numerical_sensitivities(solver, ε)
-
-Compute numerical sensitivities (dK, dP, dC1, dC2) w.r.t. ρ by central
-finite-differences using TinyMPC.compute_cache_terms.  ε is the step size.
-"""
-function numerical_sensitivities(solver::TinyMPCSolver; ε::Float64 = 1e-4)
-    # Cache terms at ρ+ε and ρ-ε
-    cache₊ = compute_cache_terms(solver, A, B, Q, R; rho=ρ + ε)
-    cache₋ = compute_cache_terms(solver, A, B, Q, R; rho=ρ - ε)
-
-    dK  = (cache₊.Kinf   - cache₋.Kinf)   / (2ε)
-    dP  = (cache₊.Pinf   - cache₋.Pinf)   / (2ε)
-    dC1 = (cache₊.Quu_inv - cache₋.Quu_inv) / (2ε)
-    dC2 = (cache₊.AmBKt  - cache₋.AmBKt)  / (2ε)
-    return dK, dP, dC1, dC2
-end
-
 # ------------------------- Main workflow --------------------------------------
 function main()
     # 1) Create and set-up solver
     solver = TinyMPCSolver()
-    @assert setup!(solver, A, B, f, Q, R, ρ, nx, nu, N, verbose=false) == 0
+    @assert setup(solver, A, B, f, Q, R, ρ, nx, nu, N, verbose=false) == 0
 
     # 2) Hover reference (all zeros)
-    set_x_ref!(solver, zeros(nx, N))
-    set_u_ref!(solver, zeros(nu, N-1))
+    set_x_ref(solver, zeros(nx, N))
+    set_u_ref(solver, zeros(nu, N-1))
 
-    # 3) Compute cache terms and sensitivities
+    # 3) Compute cache terms and sensitivities using built-in function
     @info "Computing cache terms and sensitivities (finite-difference)…"
-    dK, dP, dC1, dC2 = numerical_sensitivities(solver)
+    dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
 
     # Store them inside TinyMPC so that codegen_with_sensitivity can pick them up
-    set_sensitivity_matrices!(solver, dK, dP, dC1, dC2)
+    set_sensitivity_matrices(solver, dK, dP, dC1, dC2)
 
     # 4) Code generation + artifact copy
     out_dir = joinpath(@__DIR__, "out")

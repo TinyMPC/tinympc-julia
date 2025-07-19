@@ -18,22 +18,22 @@ function main()
     u_min = fill(-5.0, 1, N-1); u_max = fill(5.0, 1, N-1)
 
     solver = TinyMPCSolver()
-    status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N)
+    status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N)
     @assert status == 0
-    set_bound_constraints!(solver, x_min, x_max, u_min, u_max)
+    set_bound_constraints(solver, x_min, x_max, u_min, u_max)
 
     x = [0.0, 0, 0.1, 0]  # small angle perturbation
-    set_x0!(solver, x)
-    set_x_ref!(solver, zeros(4, N))
-    set_u_ref!(solver, zeros(1, N-1))
+    set_x0(solver, x)
+    set_x_ref(solver, zeros(4, N))
+    set_u_ref(solver, zeros(1, N-1))
 
     Nsim = 150; xs = zeros(4, Nsim); us = zeros(Nsim)
     for k in 1:Nsim
-        solve!(solver)
+        solve(solver)
         sol = get_solution(solver)
         u = sol.controls[1]
         x = vec(A * x + B * u)
-        set_x0!(solver, x)
+        set_x0(solver, x)
         xs[:, k] = x; us[k] = u
     end
 

@@ -17,15 +17,15 @@ function main()
 
     # Create solver and setup
     solver = TinyMPCSolver()
-    status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
+    status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
                    max_iter=10, verbose=false)
     @assert status == 0 "Solver setup failed"
 
     # Initial state and references
     x0 = [0.5, 0.0, 0.0, 0.0]
-    set_x0!(solver, x0)
-    set_x_ref!(solver, zeros(4, N))
-    set_u_ref!(solver, zeros(1, N-1))
+    set_x0(solver, x0)
+    set_x_ref(solver, zeros(4, N))
+    set_u_ref(solver, zeros(1, N-1))
 
     # Simulation loop (matching Python example duration)
     Nsim = 200
@@ -34,7 +34,7 @@ function main()
 
     for k in 1:Nsim
         # Solve MPC problem
-        status = solve!(solver)
+        status = solve(solver)
         @assert status == 0 "Solve failed at step $k"
         
         # Get solution and extract first control
@@ -43,7 +43,7 @@ function main()
         
         # Simulate forward (same as Python: x = A@x + B@u)
         x0 = vec(A * x0 + B * u)
-        set_x0!(solver, x0)
+        set_x0(solver, x0)
         
         # Store results
         xs[:, k] = x0

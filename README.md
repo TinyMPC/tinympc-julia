@@ -2,33 +2,54 @@
 
 Julia wrapper for [TinyMPC](https://tinympc.org/). Supports code generation and interaction with the C/C++ backend. Tested on Ubuntu and macOS.
 
+
+## Prerequisites
+
+- Julia 1.6 or later
+- C++ compiler with C++17 support  
+- No additional packages required (numerical differentiation used instead of ForwardDiff.jl)
+
+
 ## Building
 
-1. **Clone with submodules:**
-```bash
-git clone --recurse-submodules https://github.com/TinyMPC/tinympc-julia.git
-cd tinympc-julia
-```
+1. **Clone this repo (with submodules):**
+   ```bash
+   git clone --recurse-submodules https://github.com/TinyMPC/tinympc-julia.git
+   ```
+   If you already cloned without `--recurse-submodules`, run:
+   ```bash
+   git submodule update --init --recursive
+   ```
 
 2. **Install and build:**
-```bash
-# Develop the package in Julia
-julia -e "using Pkg; Pkg.develop(PackageSpec(path=\".\"))"
+   ```bash
+   cd tinympc-julia
+   
+   # Develop the package in Julia
+   julia -e "using Pkg; Pkg.develop(PackageSpec(path=\".\"))"
 
-# Build the C++ library (automatically runs deps/build.jl)
-julia -e "using Pkg; Pkg.build()"
-
-# Or build manually if needed:
-# julia deps/build.jl
-```
+   # Build the C++ library (automatically runs deps/build.jl)
+   julia -e "using Pkg; Pkg.build(\"TinyMPC\")"
+   ```
 
 3. **Verify installation:**
-```bash
-# Test that the module loads correctly
-julia -e "using TinyMPC; solver = TinyMPCSolver(); println(\"✅ TinyMPC.jl ready to use!\")"
-```
+   ```bash
+   # Test that the module loads correctly
+   julia -e "using TinyMPC; solver = TinyMPCSolver(); println(\"✅ TinyMPC.jl ready to use!\")"
+   ```
 
-## Basic Usage
+## Examples
+
+The `examples/` directory contains scripts demonstrating TinyMPC features:
+- `cartpole_one_solve_demo.jl` - One-step solve
+- `cartpole_example_mpc.jl` - Full MPC loop  
+- `cartpole_example_reference_constrained.jl` - Reference tracking and constraints
+- `cartpole_example_code_generation.jl` - Code generation
+- `quadrotor_hover_codegen.jl` - Quadrotor codegen
+
+## Usage Example
+
+### Basic MPC Workflow
 
 ```julia
 using TinyMPC
@@ -47,140 +68,119 @@ rho = 1.0
 
 # Create and setup solver
 solver = TinyMPCSolver()
-status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
 
-# Set initial state and references
-set_x0!(solver, [0.5, 0.0, 0.0, 0.0])
-set_x_ref!(solver, zeros(4, N))
-set_u_ref!(solver, zeros(1, N-1))
+# Set initial state and solve
+x0 = [0.5; 0; 0; 0]  # Initial state
+set_x0(solver, x0)
+solution = solve(solver)
 
-# Solve and get solution
-status = solve!(solver)
-solution = get_solution(solver)
-
-println("Optimal states: ", solution.states)
-println("Optimal controls: ", solution.controls)
+# Access solution
+println("First control: $(solution.controls[1])")
+states_trajectory = solution.states_all      # All predicted states  
+controls_trajectory = solution.controls_all  # All predicted controls
 ```
 
-## Running Examples
+### Code Generation Workflow
 
-All examples work out-of-the-box using the direct include approach:
+```julia
+# Setup solver with constraints
+solver = TinyMPCSolver()
+u_min = fill(-0.5, 1, 1); u_max = fill(0.5, 1, 1)  # Control bounds
+setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, u_min=u_min, u_max=u_max)
 
-```bash
-# Basic one-solve example
-julia --project=. --compile=min --startup-file=no examples/cartpole_one_solve_demo.jl
-
-# Full MPC simulation
-julia --project=. --compile=min --startup-file=no examples/cartpole_example_mpc.jl
-
-# Code generation
-julia --project=. --compile=min --startup-file=no examples/cartpole_example_code_generation.jl
-
-# Advanced quadrotor example
-julia --project=. --compile=min --startup-file=no examples/quadrotor_hover_codegen.jl
+# Generate C++ code
+codegen(solver, "out")
 ```
 
-**Expected Output:**
-- `cartpole_one_solve_demo.jl`: Single optimal control value and predicted trajectory
-- `cartpole_example_mpc.jl`: 200-step MPC simulation with convergence in 2-7 iterations
-- `cartpole_example_code_generation.jl`: C++ code generated in `examples/out/`
-- `quadrotor_hover_codegen.jl`: C++ code generated in `examples/out/`
+### Adaptive Rho Workflow
 
-## Running Tests
+```julia
+# Compute sensitivity matrices using built-in numerical differentiation
+dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
+
+# Generate code with sensitivity matrices
+codegen_with_sensitivity(solver, "out", dK, dP, dC1, dC2)
+```
+
+See `examples/quadrotor_hover_codegen.jl` for a complete example.
+
+## Key Features
 
 The test suite verifies all core functionality:
 
-```bash
-# Run individual test files
-julia --project=. --compile=min --startup-file=no tests/test_basic.jl
-julia --project=. --compile=min --startup-file=no tests/test_cache.jl
-julia --project=. --compile=min --startup-file=no tests/test_settings.jl
-```
+## Notes on Sensitivity Computation
 
-## Advanced Features
+- The method `compute_sensitivity_autograd()` uses numerical finite differences to compute derivatives of the LQR solution with respect to `rho` (just like MATLAB)
+- This is faster and more reliable than automatic differentiation, especially for larger systems
+- Uses step size `h = 1e-6` for numerical differentiation: `d/drho ≈ (f(rho+h) - f(rho)) / h`
+- Required for adaptive rho workflows and generating code with sensitivity matrices
 
-### Setup with All Options
+## API Reference
 
-```julia
-# Setup solver with constraints and advanced settings
-u_min = fill(-0.5, 1, N-1)  # Input bounds (nu x N-1)
-u_max = fill(0.5, 1, N-1)   
-
-solver = TinyMPCSolver()
-status = setup!(solver, A, B, zeros(4), Q, R, rho, 4, 1, N,
-               verbose=false,
-               abs_pri_tol=1e-4,
-               abs_dua_tol=1e-4, 
-               max_iter=100,
-               adaptive_rho=true,
-               adaptive_rho_min=0.1,
-               adaptive_rho_max=10.0,
-               u_min=u_min,
-               u_max=u_max)
-```
-
-### Cache Term Management
+### Core Functions
 
 ```julia
-# Compute LQR cache matrices
-cache = compute_cache_terms(solver, A, B, Q, R, rho=rho)
+# Setup solver with system matrices
+setup(solver, A, B, fdyn, Q, R, rho, nx, nu, N; kwargs...)
 
-# Manually set cache terms  
-set_cache_terms!(solver, cache.Kinf, cache.Pinf, cache.Quu_inv, cache.AmBKt)
+# Set initial state and references  
+set_x0(solver, x0)
+set_x_ref(solver, x_ref)  
+set_u_ref(solver, u_ref)
+
+# Solve and get solution
+solution = solve(solver)
+states = get_states(solver)
+controls = get_controls(solver)
 ```
 
 ### Code Generation
 
 ```julia
 # Generate standalone C++ code
-status = codegen(solver, "output_dir", verbose=true)
+codegen(solver, output_dir)
 
-# The generated code includes:
-# - CMakeLists.txt (build system)
-# - setup.py (Python bindings)
-# - src/tiny_main.cpp (example usage)
-# - src/tiny_data.cpp (problem data)
-# - tinympc/tiny_data.hpp (headers)
+# Generate code with sensitivity matrices  
+codegen_with_sensitivity(solver, output_dir, dK, dP, dC1, dC2)
 ```
 
-## API Reference
+### Sensitivity Analysis
 
-### Core Functions
-- `TinyMPCSolver()` - Create solver instance
-- `setup!(solver, A, B, f, Q, R, rho, nx, nu, N; kwargs...)` - Initialize solver
-- `solve!(solver)` - Solve MPC problem
-- `get_solution(solver)` - Get optimal states and controls
+```julia
+# Compute sensitivity matrices using built-in autograd function
+dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
+```
 
-### State and Reference Setting
-- `set_x0!(solver, x0)` - Set initial state
-- `set_x_ref!(solver, x_ref)` - Set state reference trajectory  
-- `set_u_ref!(solver, u_ref)` - Set input reference trajectory
+### Configuration  
 
-### Advanced Features
-- `compute_cache_terms(solver, A, B, Q, R; rho)` - Compute LQR cache matrices
-- `set_cache_terms!(solver, Kinf, Pinf, Quu_inv, AmBKt)` - Set cache matrices manually
-- `update_settings!(solver; kwargs...)` - Update solver settings
-- `print_problem_data(solver)` - Print debug information
+```julia
+# Update solver settings
+update_settings(solver; abs_pri_tol=1e-6, abs_dua_tol=1e-6, max_iter=100, kwargs...)
 
-### Code Generation
-- `codegen(solver, output_dir; verbose)` - Generate standalone C++ code
+# Set bound constraints
+set_bound_constraints(solver, x_min, x_max, u_min, u_max)
+```
 
-### Setup Options
-All parameters supported by Python/MATLAB wrappers:
-- `abs_pri_tol`, `abs_dua_tol` - Convergence tolerances (default: 1e-3)
-- `max_iter` - Maximum iterations (default: 100)
-- `x_min`, `x_max`, `u_min`, `u_max` - State/input bounds 
-- `adaptive_rho`, `adaptive_rho_min`, `adaptive_rho_max` - Adaptive rho settings
-- `verbose` - Enable verbose output
+## Solution Structure
 
-## Dependencies
+The `solve()` function returns a solution object with:
+- `solution.controls` - Optimal control sequence
+- `solution.states_all` - Full state trajectory 
+- `solution.controls_all` - Full control trajectory
+- `solution.iter` - Number of iterations
+- `solution.solved` - Success flag
 
-### Required
-- Julia ≥ 1.6
-- LinearAlgebra.jl (standard library)
-- ForwardDiff.jl (for automatic differentiation - disabled currently)
+## Testing
 
-### Build Requirements
-- CMake ≥ 3.10
-- C++ compiler with C++17 support (GCC, Clang, or Apple Clang)
-- Git (for submodules)
+Run the test suite:
+```bash
+julia -e "using Pkg; Pkg.test(\"TinyMPC\")"
+```
+
+Or run individual test files:
+```bash  
+julia tests/test_setup.jl
+julia tests/test_solve.jl
+julia tests/test_codegen.jl
+```
