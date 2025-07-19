@@ -46,6 +46,7 @@ The `examples/` directory contains scripts demonstrating TinyMPC features:
 - `cartpole_example_reference_constrained.jl` - Reference tracking and constraints
 - `cartpole_example_code_generation.jl` - Code generation
 - `quadrotor_hover_codegen.jl` - Quadrotor codegen
+- `cartpole_interactive_animation` - Animation from a cartpole problem
 
 ## Usage Example
 
@@ -70,15 +71,20 @@ rho = 1.0
 solver = TinyMPCSolver()
 setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
 
-# Set initial state and solve
+# Set initial state and references
 x0 = [0.5; 0; 0; 0]  # Initial state
 set_x0(solver, x0)
-solution = solve(solver)
+set_x_ref(solver, zeros(4, N))      # State reference trajectory
+set_u_ref(solver, zeros(1, N-1))    # Control reference trajectory
+
+# Solve and get solution
+status = solve(solver)  # Returns status code (0 = success)
+solution = get_solution(solver)  # Get actual solution
 
 # Access solution
 println("First control: $(solution.controls[1])")
-states_trajectory = solution.states_all      # All predicted states  
-controls_trajectory = solution.controls_all  # All predicted controls
+states_trajectory = solution.states      # All predicted states (4×20)
+controls_trajectory = solution.controls  # All predicted controls (1×19)
 ```
 
 ### Code Generation Workflow
@@ -86,7 +92,7 @@ controls_trajectory = solution.controls_all  # All predicted controls
 ```julia
 # Setup solver with constraints
 solver = TinyMPCSolver()
-u_min = fill(-0.5, 1, 1); u_max = fill(0.5, 1, 1)  # Control bounds
+u_min = fill(-0.5, 1, N-1); u_max = fill(0.5, 1, N-1)  # Control bounds (1×19)
 setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, u_min=u_min, u_max=u_max)
 
 # Generate C++ code
@@ -96,6 +102,10 @@ codegen(solver, "out")
 ### Adaptive Rho Workflow
 
 ```julia
+# Setup solver first
+solver = TinyMPCSolver()
+setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N)
+
 # Compute sensitivity matrices using built-in numerical differentiation
 dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
 
@@ -105,17 +115,6 @@ codegen_with_sensitivity(solver, "out", dK, dP, dC1, dC2)
 
 See `examples/quadrotor_hover_codegen.jl` for a complete example.
 
-## Key Features
-
-The test suite verifies all core functionality:
-
-## Notes on Sensitivity Computation
-
-- The method `compute_sensitivity_autograd()` uses numerical finite differences to compute derivatives of the LQR solution with respect to `rho` (just like MATLAB)
-- This is faster and more reliable than automatic differentiation, especially for larger systems
-- Uses step size `h = 1e-6` for numerical differentiation: `d/drho ≈ (f(rho+h) - f(rho)) / h`
-- Required for adaptive rho workflows and generating code with sensitivity matrices
-
 ## API Reference
 
 ### Core Functions
@@ -124,15 +123,14 @@ The test suite verifies all core functionality:
 # Setup solver with system matrices
 setup(solver, A, B, fdyn, Q, R, rho, nx, nu, N; kwargs...)
 
-# Set initial state and references  
+# Set initial state and references 
 set_x0(solver, x0)
 set_x_ref(solver, x_ref)  
 set_u_ref(solver, u_ref)
 
 # Solve and get solution
-solution = solve(solver)
-states = get_states(solver)
-controls = get_controls(solver)
+status = solve(solver)        # Returns status code (Int32): 0 = success
+solution = get_solution(solver)  # Returns (states=Matrix, controls=Matrix)
 ```
 
 ### Code Generation
@@ -164,23 +162,8 @@ set_bound_constraints(solver, x_min, x_max, u_min, u_max)
 
 ## Solution Structure
 
-The `solve()` function returns a solution object with:
-- `solution.controls` - Optimal control sequence
-- `solution.states_all` - Full state trajectory 
-- `solution.controls_all` - Full control trajectory
-- `solution.iter` - Number of iterations
-- `solution.solved` - Success flag
+The `get_solution()` function returns a NamedTuple with:
+- `solution.states` - Full state trajectory (nx × N matrix)
+- `solution.controls` - Optimal control sequence (nu × (N-1) matrix)
 
-## Testing
-
-Run the test suite:
-```bash
-julia -e "using Pkg; Pkg.test(\"TinyMPC\")"
-```
-
-Or run individual test files:
-```bash  
-julia tests/test_setup.jl
-julia tests/test_solve.jl
-julia tests/test_codegen.jl
-```
+See [https://tinympc.org/](https://tinympc.org/) for full documentation.
