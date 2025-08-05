@@ -2,41 +2,51 @@
 
 Julia wrapper for [TinyMPC](https://tinympc.org/). Supports code generation and interaction with the C/C++ backend. Tested on Ubuntu and macOS.
 
-
-## Prerequisites
-
-- Julia 1.6 or later
-- C++ compiler with C++17 support  
-- No additional packages required (numerical differentiation used instead of ForwardDiff.jl)
-
-
-## Building
+## Installation
 
 1. **Clone this repo (with submodules):**
    ```bash
    git clone --recurse-submodules https://github.com/TinyMPC/tinympc-julia.git
+   cd tinympc-julia
    ```
    If you already cloned without `--recurse-submodules`, run:
    ```bash
    git submodule update --init --recursive
    ```
 
-2. **Install and build:**
+2. **Install dependencies and activate the package:**
    ```bash
-   cd tinympc-julia
+   # Start Julia in the tinympc-julia directory
+   julia --project=.
+   ```
    
-   # Develop the package in Julia
-   julia -e "using Pkg; Pkg.develop(PackageSpec(path=\".\"))"
-
-   # Build the C++ library (automatically runs deps/build.jl)
-   julia -e "using Pkg; Pkg.build(\"TinyMPC\")"
+   Then in the Julia REPL:
+   ```julia
+   # Install all dependencies (including Plots.jl)
+   using Pkg
+   Pkg.instantiate()
+   
+   # Build the C++ library
+   Pkg.build("TinyMPC")
+   
+   # Test that everything works
+   using TinyMPC
+   solver = TinyMPCSolver()
    ```
+   
+   **Note:** You may see warnings about `Pkg.resolve()` - these are normal and can be ignored.
+   
+   If you see `TinyMPCSolver(Base.RefValue{Int64}(0), ...)` printed after creating the solver, installation was successful!
 
-3. **Verify installation:**
-   ```bash
-   # Test that the module loads correctly
-   julia -e "using TinyMPC; solver = TinyMPCSolver(); println(\"✅ TinyMPC.jl ready to use!\")"
-   ```
+### Running Examples
+
+After installation, you can run any example:
+```bash
+# From the tinympc-julia directory
+julia --project=. examples/cartpole_example_one_solve.jl
+julia --project=. examples/quadrotor_hover_codegen.jl
+julia --project=. examples/cartpole_interactive_animation.jl
+```
 
 ## Examples
 

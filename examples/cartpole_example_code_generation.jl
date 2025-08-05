@@ -33,4 +33,4 @@ out_dir = joinpath(@__DIR__, "out")
 status = codegen(solver, out_dir, verbose=true)
 @assert status == 0
 
-println("✅ Code generation complete at: $out_dir") 
+println("Code generation completed successfully in: $out_dir") 

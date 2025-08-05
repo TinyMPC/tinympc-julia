@@ -12,16 +12,14 @@
 -- Generating done (0.0s)
 -- Build files have been written to: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build
 [ 23%] Built target tinympcstatic
-[ 28%] Building CXX object CMakeFiles/tinympc_jl.dir/src/bindings.cpp.o
-[ 38%] Built target cartpole_example
-[ 47%] Built target quadrotor_linear_constraints
-[ 57%] Built target rocket_landing_mpc
-[ 71%] Built target codegen_random
-[ 76%] Built target quadrotor_tracking
-[ 85%] Built target quadrotor_hovering
-[ 95%] Built target codegen_cartpole
-[100%] Linking CXX shared library tinympc_jl.so
-[100%] Built target tinympc_jl
+[ 33%] Built target quadrotor_tracking
+[ 47%] Built target tinympc_jl
+[ 52%] Built target codegen_cartpole
+[ 71%] Built target rocket_landing_mpc
+[ 71%] Built target cartpole_example
+[ 90%] Built target quadrotor_hovering
+[ 90%] Built target codegen_random
+[100%] Built target quadrotor_linear_constraints
 Building TinyMPC Julia wrapper...
 Package root: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia
 Build directory: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build

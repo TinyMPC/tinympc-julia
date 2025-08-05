@@ -19,7 +19,10 @@ using .TinyMPC
 ρ = 5.0               # ADMM penalty parameter
 N  = 20               # Horizon length
 
-# State-space matrices (copied from MATLAB example)
+# Toggle switch for adaptive rho
+ENABLE_ADAPTIVE_RHO = false # Set to false to disable adaptive rho
+
+# State-space matrices
 A = [
     1.0 0.0 0.0 0.0 0.024525 0.0 0.05 0.0 0.0 0.0 0.0002044 0.0;
     0.0 1.0 0.0 -0.024525 0.0 0.0 0.0 0.05 0.0 -0.0002044 0.0 0.0;
@@ -62,25 +65,35 @@ f  = zeros(nx)          # No affine term
 function main()
     # 1) Create and set-up solver
     solver = TinyMPCSolver()
-    @assert setup(solver, A, B, f, Q, R, ρ, nx, nu, N, verbose=false) == 0
+    @assert setup(solver, A, B, f, Q, R, ρ, nx, nu, N, 
+                 verbose=true, adaptive_rho=ENABLE_ADAPTIVE_RHO) == 0
 
     # 2) Hover reference (all zeros)
     set_x_ref(solver, zeros(nx, N))
     set_u_ref(solver, zeros(nu, N-1))
 
-    # 3) Compute cache terms and sensitivities using built-in function
-    @info "Computing cache terms and sensitivities (finite-difference)…"
-    dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
-
-    # Store them inside TinyMPC so that codegen_with_sensitivity can pick them up
-    set_sensitivity_matrices(solver, dK, dP, dC1, dC2)
-
-    # 4) Code generation + artifact copy
+    # Output directory for code generation
     out_dir = joinpath(@__DIR__, "out")
     mkpath(out_dir)
-    codegen_with_sensitivity(solver, out_dir, dK, dP, dC1, dC2; verbose=true)
-    println("\n🎉  Code-generation complete.  Output directory: $(out_dir)")
-    println("   To compile:  cd $(out_dir); cmake . && make -j$(Sys.CPU_THREADS)\n")
+
+    if ENABLE_ADAPTIVE_RHO
+        println("Enabled adaptive rho - generating code with sensitivity matrices...")
+        
+        # 3) Compute cache terms and sensitivities using built-in function
+        @info "Computing cache terms and sensitivities (finite-difference)…"
+        dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
+
+        # 4) Code generation with sensitivity matrices
+        # The sensitivity matrices are passed directly to codegen_with_sensitivity
+        codegen_with_sensitivity(solver, out_dir, dK, dP, dC1, dC2; verbose=true)
+    else
+        println("Running without adaptive rho - generating code without sensitivity matrices...")
+        
+        # 4) Regular code generation without sensitivity
+        codegen(solver, out_dir, verbose=true)
+    end
+    
+    println("Code generation completed successfully in: $(out_dir)")
 end
 
 # Execute when run as a script

@@ -37,8 +37,13 @@ function main()
         xs[:, k] = x; us[k] = u
     end
 
-    plot(xs', layout=(2,1), label=["x" "θ" "ẋ" "θ̇"], title="States with constraints")
+    println("MPC simulation with constraints completed successfully")
+    println("Final state: ", xs[:, end])
+    println("Average control effort: ", sum(abs.(us))/length(us))
+    
+    # Visualize results
+    plot(xs', layout=(2,1), label=["x" "θ" "ẋ" "θ̇"], title="States with constraints")
     plot!(us, subplot=2, label="u", title="Control (bounded ±5 N)")
 end
 
-main() 
+main()

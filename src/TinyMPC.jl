@@ -1,11 +1,10 @@
 module TinyMPC
 
 export TinyMPCSolver, setup, solve, get_solution, set_x0, set_x_ref, set_u_ref, 
-       set_bound_constraints, update_settings, compute_cache_terms,
-       set_sensitivity_matrices, set_cache_terms, print_problem_data,
+       set_bound_constraints, update_settings, set_cache_terms, print_problem_data,
        compute_sensitivity_autograd, codegen, codegen_with_sensitivity
 
-using LinearAlgebra, Libdl
+using LinearAlgebra, Libdl, Printf
 
 # Runtime state management (simplified)
 const _state = Ref{Dict{Symbol, Any}}()
@@ -93,8 +92,28 @@ function setup(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64}, f:
                    u_min, size(u_min,1), size(u_min,2), u_max, size(u_max,1), size(u_max,2),
                    verbose ? 1 : 0)
     
-    status == 0 ? (solver.is_setup[] = true) : error("Setup failed with status: $status")
-    verbose && println("TinyMPC solver setup successful")
+    if status == 0
+        solver.is_setup[] = true
+        
+        # Push settings to C++ layer (including adaptive_rho settings)
+        update_settings(solver, 
+                       abs_pri_tol=abs_pri_tol, 
+                       abs_dua_tol=abs_dua_tol,
+                       max_iter=max_iter, 
+                       check_termination=check_termination,
+                       en_state_bound=enable_state_bound, 
+                       en_input_bound=enable_input_bound,
+                       adaptive_rho=adaptive_rho,
+                       adaptive_rho_min=adaptive_rho_min,
+                       adaptive_rho_max=adaptive_rho_max,
+                       adaptive_rho_enable_clipping=adaptive_rho_clipping,
+                       verbose=verbose)
+        
+        verbose && @printf("TinyMPC solver setup successful (nx=%d, nu=%d, N=%d)\n", nx, nu, N)
+    else
+        error("Setup failed with status: $status")
+    end
+    
     return status
 end
 
@@ -178,28 +197,36 @@ function set_bound_constraints(solver::TinyMPCSolver,
     return status
 end
 
-function update_settings(solver::TinyMPCSolver; kwargs...)
+function update_settings(solver::TinyMPCSolver; 
+                         abs_pri_tol::Float64=1e-3, 
+                         abs_dua_tol::Float64=1e-3,
+                         max_iter::Int=100, 
+                         check_termination::Bool=true,
+                         en_state_bound::Bool=false, 
+                         en_input_bound::Bool=false,
+                         adaptive_rho::Bool=false,
+                         adaptive_rho_min::Float64=0.1,
+                         adaptive_rho_max::Float64=10.0,
+                         adaptive_rho_enable_clipping::Bool=true,
+                         verbose::Bool=false)
     _ensure_loaded()
-    # Implementation would go here - simplified for now
-    return 0
+    
+    status = ccall((:update_settings, _lib_path()), Int32,
+                   (Float64, Float64, Int32, Int32, Int32, Int32, 
+                    Int32, Float64, Float64, Int32, Int32),
+                   abs_pri_tol, abs_dua_tol, max_iter, check_termination ? 1 : 0,
+                   en_state_bound ? 1 : 0, en_input_bound ? 1 : 0,
+                   adaptive_rho ? 1 : 0, adaptive_rho_min, adaptive_rho_max,
+                   adaptive_rho_enable_clipping ? 1 : 0, verbose ? 1 : 0)
+    
+    status != 0 && error("Failed to update settings")
+    return status
 end
 
 function print_problem_data(solver::TinyMPCSolver; verbose::Bool=false)
     solver.is_setup[] || error("Solver not setup")
     _ensure_loaded()
     ccall((:print_problem_data, _lib_path()), Int32, (Int32,), verbose ? 1 : 0)
-end
-
-"""
-    compute_cache_terms(solver, A, B, Q, R; rho)
-
-Compute LQR cache matrices for the given system.
-"""
-function compute_cache_terms(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64},
-                            Q::Matrix{Float64}, R::Matrix{Float64}; rho::Float64=1.0)
-    # Solve LQR problem and return cache matrices
-    K, P, C1, C2 = solve_lqr(A, B, Q, R, rho)
-    return (Kinf=K, Pinf=P, Quu_inv=C1, AmBKt=C2)
 end
 
 function set_cache_terms(solver::TinyMPCSolver, Kinf::Matrix{Float64}, Pinf::Matrix{Float64},
@@ -218,26 +245,7 @@ function set_cache_terms(solver::TinyMPCSolver, Kinf::Matrix{Float64}, Pinf::Mat
     return status
 end
 
-function set_sensitivity_matrices(solver::TinyMPCSolver, dK::Matrix{Float64}, dP::Matrix{Float64},
-                                 dC1::Matrix{Float64}, dC2::Matrix{Float64}; rho::Union{Float64,Nothing}=nothing, verbose::Bool=false)
-    solver.is_setup[] || error("Solver not setup")
-    _ensure_loaded()
-    
-    # Update rho if provided
-    if rho !== nothing
-        solver.rho[] = rho
-    end
-    
-    status = ccall((:set_sensitivity_matrices, _lib_path()), Int32,
-                   (Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32,
-                    Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32, Int32),
-                   dK, size(dK,1), size(dK,2), dP, size(dP,1), size(dP,2),
-                   dC1, size(dC1,1), size(dC1,2), dC2, size(dC2,1), size(dC2,2),
-                   verbose ? 1 : 0)
-    
-    status != 0 && error("Failed to set sensitivity matrices")
-    return status
-end
+
 
 """
     compute_sensitivity_autograd(solver)
@@ -248,8 +256,6 @@ NOTE: THIS IS NUMERICAL DIFFERENTIATION, NOT SYMBOLIC DIFFERENTIATION
 """
 function compute_sensitivity_autograd(solver::TinyMPCSolver)
     solver.is_setup[] || error("Solver not setup")
-    
-    println("Computing sensitivity matrices using numerical differentiation")
     
     # Use finite differences - robust and fast for all system sizes
     h = 1e-6  # Step size for numerical differentiation
@@ -267,36 +273,10 @@ function compute_sensitivity_autograd(solver::TinyMPCSolver)
     dC1 = (C1_1 - C1_0) / h
     dC2 = (C2_1 - C2_0) / h
     
-    println("Sensitivity matrices computed successfully")
-    
     return (dK, dP, dC1, dC2)
 end
 
-# Legacy API compatibility for tests
-function compute_sensitivity_autograd(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64},
-                                     Q::Matrix{Float64}, R::Matrix{Float64}, rho::Float64; verbose::Bool=false)
-    verbose && println("Computing sensitivity matrices using numerical differentiation (legacy API)")
-    
-    # Use finite differences - robust and fast for all system sizes
-    h = 1e-6  # Step size for numerical differentiation
-    
-    # Compute LQR matrices at current rho
-    K0, P0, C1_0, C2_0 = solve_lqr(A, B, Q, R, rho)
-    
-    # Compute LQR matrices at rho + h
-    K1, P1, C1_1, C2_1 = solve_lqr(A, B, Q, R, rho + h)
-    
-    # Compute derivatives using finite differences: d/drho ≈ (f(rho+h) - f(rho)) / h
-    dK = (K1 - K0) / h
-    dP = (P1 - P0) / h
-    dC1 = (C1_1 - C1_0) / h
-    dC2 = (C2_1 - C2_0) / h
-    
-    verbose && println("Sensitivity matrices computed successfully")
-    
-    # Return as NamedTuple to match test expectations
-    return (dK=dK, dP=dP, dC1=dC1, dC2=dC2)
-end
+
 
 # Private helper function for LQR solving
 function solve_lqr(A::Matrix{Float64}, B::Matrix{Float64}, Q::Matrix{Float64}, R::Matrix{Float64}, rho_val::Float64)
@@ -337,7 +317,8 @@ function codegen(solver::TinyMPCSolver, output_dir::String; verbose::Bool=false)
     
     status = ccall((:codegen, _lib_path()), Int32, (Cstring, Int32), output_dir, verbose ? 1 : 0)
     status != 0 && error("Code generation failed")
-    verbose && println("Code generation completed successfully in $output_dir")
+    copy_build_artifacts(output_dir)
+    @printf("Code generation completed successfully in: %s\n", output_dir)
     return status
 end
 
@@ -348,13 +329,15 @@ Generate standalone C++ code with sensitivity matrices for adaptive rho.
 """
 function codegen_with_sensitivity(solver::TinyMPCSolver, output_dir::String,
                                  dK::Matrix{Float64}, dP::Matrix{Float64},
-                                 dC1::Matrix{Float64}, dC2::Matrix{Float64}; verbose::Bool=false)
+                                 dC1::Matrix{Float64}, dC2::Matrix{Float64}; 
+                                 verbose::Bool=false)
     solver.is_setup[] || error("Solver not setup")
     _ensure_loaded()
     
-    # Set sensitivity matrices first
-    set_sensitivity_matrices(solver, dK, dP, dC1, dC2; verbose=verbose)
+    @printf("Sensitivity matrix norms: dK=%.6e, dP=%.6e, dC1=%.6e, dC2=%.6e\n", norm(dK), norm(dP), norm(dC1), norm(dC2))
     
+    # Pass sensitivity matrices directly to C++ function
+    # The C++ core will check if adaptive_rho is enabled and store matrices accordingly
     status = ccall((:codegen_with_sensitivity, _lib_path()), Int32,
                    (Cstring, Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32,
                     Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32, Int32),
@@ -362,8 +345,39 @@ function codegen_with_sensitivity(solver::TinyMPCSolver, output_dir::String,
                    dC1, size(dC1,1), size(dC1,2), dC2, size(dC2,1), size(dC2,2), verbose ? 1 : 0)
     
     status != 0 && error("Code generation with sensitivity failed")
-    verbose && println("Code generation with sensitivity completed successfully in $output_dir")
+    copy_build_artifacts(output_dir)
+    @printf("Code generation with sensitivity matrices completed successfully in: %s\n", output_dir)
     return status
+end
+
+# Copy build artifacts
+function copy_build_artifacts(output_dir::String)
+    try
+        # Get the path to codegen_src directory (same level as TinyMPC.jl)
+        module_dir = dirname(@__FILE__)
+        codegen_src_path = joinpath(module_dir, "codegen_src")
+        
+        if isdir(codegen_src_path)
+            # Copy all contents from codegen_src to output directory
+            # This copies the directory contents, not the directory itself
+            for item in readdir(codegen_src_path)
+                src_item = joinpath(codegen_src_path, item)
+                dst_item = joinpath(output_dir, item)
+                if !ispath(dst_item)  # Only copy if destination doesn't exist
+                    cp(src_item, dst_item; force=false, follow_symlinks=true)
+                end
+            end
+            @printf("Copied all contents from codegen_src to output directory\n")
+        end
+        
+        # Create build directory if it doesn't exist
+        build_path = joinpath(output_dir, "build")
+        if !isdir(build_path)
+            mkdir(build_path)
+        end
+    catch e
+        @warn "Error copying build artifacts: $(e)"
+    end
 end
 
 # Cleanup function

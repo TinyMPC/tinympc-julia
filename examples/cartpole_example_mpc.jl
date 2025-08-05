@@ -50,7 +50,7 @@ function main()
         us[k] = u
     end
 
-    println("MPC simulation completed successfully!")
+    println("MPC simulation completed successfully")
     println("Final state: ", xs[:, end])
     println("Average control effort: ", sum(abs.(us))/length(us))
     

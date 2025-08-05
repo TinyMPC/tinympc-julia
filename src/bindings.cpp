@@ -313,34 +313,7 @@ extern "C" int set_cache_terms(double* Kinf_data, int Kinf_rows, int Kinf_cols,
     }
 }
 
-// Set sensitivity matrices for adaptive rho support
-extern "C" int set_sensitivity_matrices(double* dK_data, int dK_rows, int dK_cols,
-                                         double* dP_data, int dP_rows, int dP_cols,
-                                         double* dC1_data, int dC1_rows, int dC1_cols,
-                                         double* dC2_data, int dC2_rows, int dC2_cols,
-                                         int verbose) {
-    try {
-        if (!g_solver) {
-            throw std::runtime_error("Solver not initialized");
-        }
-        
-        Eigen::Map<Eigen::MatrixXd> dK(dK_data, dK_rows, dK_cols);
-        Eigen::Map<Eigen::MatrixXd> dP(dP_data, dP_rows, dP_cols);
-        Eigen::Map<Eigen::MatrixXd> dC1(dC1_data, dC1_rows, dC1_cols);
-        Eigen::Map<Eigen::MatrixXd> dC2(dC2_data, dC2_rows, dC2_cols);
-        
-        if (verbose) {
-            std::cout << "Sensitivity matrices set - dK norm: " << dK.norm() 
-                      << ", dP norm: " << dP.norm() << std::endl;
-        }
-        
-        return 0;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "set_sensitivity_matrices failed: " << e.what() << std::endl;
-        return -1;
-    }
-}
+
 
 // Code generation with sensitivity matrices
 extern "C" int codegen_with_sensitivity(const char* output_dir,
@@ -378,42 +351,12 @@ extern "C" int codegen_with_sensitivity(const char* output_dir,
     }
 }
 
-// Compute cache terms using C++ API
-extern "C" int compute_cache_terms(int verbose) {
-    try {
-        if (!g_solver) {
-            throw std::runtime_error("Solver not initialized");
-        }
-        if (!g_solver->cache) {
-            throw std::runtime_error("Solver cache not initialized");
-        }
-        
-        int status = tiny_precompute_and_set_cache(g_solver->cache,
-                                                   g_solver->work->Adyn,
-                                                   g_solver->work->Bdyn,
-                                                   g_solver->work->fdyn,
-                                                   g_solver->work->Q,
-                                                   g_solver->work->R,
-                                                   g_solver->work->nx,
-                                                   g_solver->work->nu,
-                                                   g_solver->cache->rho,
-                                                   verbose);
-        
-        if (verbose) std::cout << "Cache computation completed with status: " << status << std::endl;
-        return status;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "compute_cache_terms failed: " << e.what() << std::endl;
-        return -1;
-    }
-}
+
 
 // Enhanced update_settings with all parameters
 extern "C" int update_settings(double abs_pri_tol, double abs_dua_tol,
                                 int max_iter, int check_termination,
                                 int en_state_bound, int en_input_bound,
-                                int en_state_soc, int en_input_soc,
-                                int en_state_linear, int en_input_linear,
                                 int adaptive_rho, double adaptive_rho_min,
                                 double adaptive_rho_max, int adaptive_rho_enable_clipping,
                                 int verbose) {
@@ -422,13 +365,21 @@ extern "C" int update_settings(double abs_pri_tol, double abs_dua_tol,
             throw std::runtime_error("Solver not initialized");
         }
 
-        int status = tiny_update_settings(g_solver->settings,
-                                         static_cast<tinytype>(abs_pri_tol),
-                                         static_cast<tinytype>(abs_dua_tol),
-                                         max_iter, check_termination,
-                                         en_state_bound, en_input_bound,
-                                         en_state_soc, en_input_soc,
-                                         en_state_linear, en_input_linear);
+        // Direct update settings on solver (same as MATLAB implementation)
+        g_solver->settings->abs_pri_tol = static_cast<tinytype>(abs_pri_tol);
+        g_solver->settings->abs_dua_tol = static_cast<tinytype>(abs_dua_tol);
+        g_solver->settings->max_iter = max_iter;
+        g_solver->settings->check_termination = check_termination;
+        g_solver->settings->en_state_bound = en_state_bound;
+        g_solver->settings->en_input_bound = en_input_bound;
+        
+        // Update adaptive rho settings
+        g_solver->settings->adaptive_rho = adaptive_rho;
+        g_solver->settings->adaptive_rho_min = static_cast<tinytype>(adaptive_rho_min);
+        g_solver->settings->adaptive_rho_max = static_cast<tinytype>(adaptive_rho_max);
+        g_solver->settings->adaptive_rho_enable_clipping = adaptive_rho_enable_clipping;
+        
+        int status = 0; // Success
         
         if (verbose) std::cout << "Updated settings with status: " << status << std::endl;
         return status;
