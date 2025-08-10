@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.6"
+julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "d9bccc1e53d62fdc73b5525282414e9e0c9d6fbb"
+project_hash = "ed2b79a346296db6259cf7e1f0353741dd2feb32"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -528,7 +528,7 @@ version = "0.3.27+1"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]

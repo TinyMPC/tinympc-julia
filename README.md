@@ -26,9 +26,11 @@ Julia wrapper for [TinyMPC](https://tinympc.org/). Supports code generation and 
    using Pkg
    Pkg.instantiate()
    
+   
+   
    # Build the C++ library
    Pkg.build("TinyMPC")
-   
+ 
    # Test that everything works
    using TinyMPC
    solver = TinyMPCSolver()
@@ -44,19 +46,24 @@ After installation, you can run any example:
 ```bash
 # From the tinympc-julia directory
 julia --project=. examples/cartpole_example_one_solve.jl
+julia --project=. examples/cartpole_example_mpc.jl
+julia --project=. examples/cartpole_example_reference_constrained.jl
+julia --project=. examples/cartpole_example_code_generation.jl
 julia --project=. examples/quadrotor_hover_codegen.jl
 julia --project=. examples/cartpole_interactive_animation.jl
 ```
 
+**Note:** The `quadrotor_hover_codegen.jl` example requires ForwardDiff for automatic differentiation (already installed above) You can install it with `Pkg.add("ForwardDiff")`.
+
 ## Examples
 
 The `examples/` directory contains scripts demonstrating TinyMPC features:
-- `cartpole_one_solve_demo.jl` - One-step solve
+- `cartpole_example_one_solve.jl` - One-step solve
 - `cartpole_example_mpc.jl` - Full MPC loop  
 - `cartpole_example_reference_constrained.jl` - Reference tracking and constraints
 - `cartpole_example_code_generation.jl` - Code generation
-- `quadrotor_hover_codegen.jl` - Quadrotor codegen
-- `cartpole_interactive_animation` - Animation from a cartpole problem
+- `quadrotor_hover_codegen.jl` - Quadrotor codegen with sensitivity analysis
+- `cartpole_interactive_animation.jl` - Animation from a cartpole problem
 
 ## Usage Example
 

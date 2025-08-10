@@ -1,32 +1,58 @@
--- Found Julia: /home/moises/.juliaup/bin/julia (version 1.11.6)
--- Julia include dir: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/include/julia
--- Julia libraries: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/lib/libjulia.so
--- Julia executable: /home/moises/.juliaup/bin/julia
--- Julia include dir: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/include/julia
--- Julia libraries: /home/moises/.julia/juliaup/julia-1.11.6+0.x64.linux.gnu/lib/libjulia.so
+-- Found Julia: /home/imahajan/safe-reachability/julia-1.11.3/bin/julia (version 1.11.3)
+-- Julia include dir: /home/imahajan/safe-reachability/julia-1.11.3/include/julia
+-- Julia libraries: /home/imahajan/safe-reachability/julia-1.11.3/lib/libjulia.so
+-- Julia executable: /home/imahajan/safe-reachability/julia-1.11.3/bin/julia
+-- Julia include dir: /home/imahajan/safe-reachability/julia-1.11.3/include/julia
+-- Julia libraries: /home/imahajan/safe-reachability/julia-1.11.3/lib/libjulia.so
 -- TinyMPC Julia wrapper configured successfully
 --   - Using direct Julia C API (no CxxWrap)
 --   - Target: libtinympc_jl.so
 --   - Build with: make -j${nproc}
--- Configuring done (0.3s)
--- Generating done (0.0s)
--- Build files have been written to: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/imahajan/tinympc-julia/build
+[  4%] Building CXX object tinympc/TinyMPC/src/tinympc/CMakeFiles/tinympcstatic.dir/rho_benchmark.cpp.o
+[  9%] Building CXX object tinympc/TinyMPC/src/tinympc/CMakeFiles/tinympcstatic.dir/codegen.cpp.o
+[ 14%] Building CXX object tinympc/TinyMPC/src/tinympc/CMakeFiles/tinympcstatic.dir/tiny_api.cpp.o
+[ 19%] Building CXX object tinympc/TinyMPC/src/tinympc/CMakeFiles/tinympcstatic.dir/admm.cpp.o
+[ 23%] Linking CXX static library libtinympcstatic.a
 [ 23%] Built target tinympcstatic
-[ 33%] Built target quadrotor_tracking
-[ 47%] Built target tinympc_jl
-[ 52%] Built target codegen_cartpole
-[ 71%] Built target rocket_landing_mpc
-[ 71%] Built target cartpole_example
-[ 90%] Built target quadrotor_hovering
-[ 90%] Built target codegen_random
+Consolidate compiler generated dependencies of target quadrotor_tracking
+Consolidate compiler generated dependencies of target quadrotor_hovering
+Consolidate compiler generated dependencies of target codegen_random
+Consolidate compiler generated dependencies of target codegen_cartpole
+Consolidate compiler generated dependencies of target tinympc_jl
+[ 28%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/cartpole_example.dir/cartpole_example.cpp.o
+[ 33%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/rocket_landing_mpc.dir/rocket_landing_mpc.cpp.o
+[ 42%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/codegen_cartpole.dir/codegen_cartpole.cpp.o
+[ 42%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/codegen_random.dir/codegen_random.cpp.o
+[ 47%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/quadrotor_linear_constraints.dir/quadrotor_linear_constraints.cpp.o
+[ 52%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/quadrotor_hovering.dir/quadrotor_hovering.cpp.o
+[ 57%] Building CXX object tinympc/TinyMPC/examples/CMakeFiles/quadrotor_tracking.dir/quadrotor_tracking.cpp.o
+[ 61%] Building CXX object CMakeFiles/tinympc_jl.dir/src/bindings.cpp.o
+[ 66%] Linking CXX executable codegen_random
+[ 71%] Linking CXX shared library tinympc_jl.so
+[ 76%] Linking CXX executable codegen_cartpole
+[ 76%] Built target codegen_random
+[ 76%] Built target tinympc_jl
+[ 76%] Built target codegen_cartpole
+[ 80%] Linking CXX executable cartpole_example
+[ 85%] Linking CXX executable quadrotor_hovering
+[ 90%] Linking CXX executable quadrotor_linear_constraints
+[ 95%] Linking CXX executable quadrotor_tracking
+[ 95%] Built target cartpole_example
+[ 95%] Built target quadrotor_hovering
+[100%] Linking CXX executable rocket_landing_mpc
 [100%] Built target quadrotor_linear_constraints
+[100%] Built target quadrotor_tracking
+[100%] Built target rocket_landing_mpc
 Building TinyMPC Julia wrapper...
-Package root: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia
-Build directory: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build
-Lib directory: /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/lib
+Package root: /home/imahajan/tinympc-julia
+Build directory: /home/imahajan/tinympc-julia/build
+Lib directory: /home/imahajan/tinympc-julia/lib
 Configuring with CMake...
-Running in /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build: ``cmake ..``
+Running in /home/imahajan/tinympc-julia/build: ``cmake ..``
 Building with make...
-Running in /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build: ``make -j22``
-Copying library from /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/build/tinympc_jl.so to /home/moises/Documents/A2R/tinympc-wrappers/tinympc-julia/lib/libtinympc_jl.so
+Running in /home/imahajan/tinympc-julia/build: ``make -j24``
+Copying library from /home/imahajan/tinympc-julia/build/tinympc_jl.so to /home/imahajan/tinympc-julia/lib/libtinympc_jl.so
 TinyMPC Julia wrapper built successfully!
