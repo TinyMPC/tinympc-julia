@@ -2,6 +2,10 @@
 generated_code*/
 *.mp4
 examples/*.h
+build/
+compile_trace.txt
+debug_test.jl
+examples/out/*
 
 /*.tar.gz
 /tmp
@@ -18,8 +22,6 @@ examples/*.h
 /source-dist.tmp1
 
 *.expmap
-*.exe
-*.dll
 *.dwo
 *.do
 *.o
