@@ -104,13 +104,32 @@ states_trajectory = solution.states      # All predicted states (4×20)
 controls_trajectory = solution.controls  # All predicted controls (1×19)
 ```
 
+### Constraints API
+
+Constraints are set after setup using dedicated functions. Each call auto-enables the corresponding flags in the C++ core.
+
+```
+# Bounds (nx×N, nx×N, nu×(N-1), nu×(N-1))
+set_bound_constraints(solver, x_min, x_max, u_min, u_max)
+
+# Linear inequalities: Alin_x x ≤ blin_x, Alin_u u ≤ blin_u
+set_linear_constraints(solver, Alin_x, blin_x, Alin_u, blin_u)
+
+# Equalities via two inequalities
+set_equality_constraints(solver, Aeq_x, beq_x; Aeq_u=Aeq_u, beq_u=beq_u)
+
+# Second-order cones (inputs first, then states)
+set_cone_constraints(solver, Acu, qcu, cu, Acx, qcx, cx)
+```
+
 ### Code Generation Workflow
 
 ```julia
 # Setup solver with constraints
 solver = TinyMPCSolver()
 u_min = fill(-0.5, 1, N-1); u_max = fill(0.5, 1, N-1)  # Control bounds (1×19)
-setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, u_min=u_min, u_max=u_max)
+setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N)
+set_bound_constraints(solver, fill(-0.5, 1, N), fill(0.5, 1, N), u_min, u_max)
 
 # Generate C++ code
 codegen(solver, "out")
