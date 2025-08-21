@@ -1,7 +1,8 @@
 module TinyMPC
 
-export TinyMPCSolver, setup, solve, get_solution, set_x0, set_x_ref, set_u_ref, 
-       set_bound_constraints, update_settings, set_cache_terms, print_problem_data,
+export TinyMPCSolver, setup, solve, get_solution, set_x0, set_x_ref, set_u_ref,
+       set_bound_constraints, set_linear_constraints, set_cone_constraints, set_equality_constraints,
+       update_settings, set_cache_terms, print_problem_data,
        compute_sensitivity_autograd, codegen, codegen_with_sensitivity
 
 using LinearAlgebra, Libdl, Printf
@@ -54,20 +55,12 @@ Setup the MPC problem with system matrices and parameters.
 function setup(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64}, f::Vector{Float64},
                Q::Matrix{Float64}, R::Matrix{Float64}, rho::Float64, nx::Int, nu::Int, N::Int;
                verbose::Bool=false, abs_pri_tol::Float64=1e-3, abs_dua_tol::Float64=1e-3,
-               max_iter::Int=100, check_termination::Bool=true, enable_state_bound::Bool=false,
-               enable_input_bound::Bool=false, adaptive_rho::Bool=false,
+               max_iter::Int=100, check_termination::Bool=true,
+               adaptive_rho::Bool=false,
                adaptive_rho_min::Float64=0.1, adaptive_rho_max::Float64=10.0,
-               adaptive_rho_clipping::Bool=true,
-               x_min::Union{Matrix{Float64}, Nothing}=nothing, x_max::Union{Matrix{Float64}, Nothing}=nothing,
-               u_min::Union{Matrix{Float64}, Nothing}=nothing, u_max::Union{Matrix{Float64}, Nothing}=nothing)
+               adaptive_rho_clipping::Bool=true)
     
     _ensure_loaded()
-    
-    # Set default bounds if not provided
-    x_min = x_min === nothing ? fill(-1e17, nx, N) : x_min
-    x_max = x_max === nothing ? fill(1e17, nx, N) : x_max
-    u_min = u_min === nothing ? fill(-1e17, nu, N-1) : u_min
-    u_max = u_max === nothing ? fill(1e17, nu, N-1) : u_max
     
     f_matrix = reshape(f, nx, 1)
     
@@ -84,25 +77,26 @@ function setup(solver::TinyMPCSolver, A::Matrix{Float64}, B::Matrix{Float64}, f:
     status = ccall((:setup_solver, _lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32,
                     Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32, Float64, Int32, Int32, Int32,
-                    Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32,
                     Int32),
                    A, size(A,1), size(A,2), B, size(B,1), size(B,2), f_matrix, size(f_matrix,1), size(f_matrix,2),
                    Q, size(Q,1), size(Q,2), R, size(R,1), size(R,2), rho, nx, nu, N,
-                   x_min, size(x_min,1), size(x_min,2), x_max, size(x_max,1), size(x_max,2),
-                   u_min, size(u_min,1), size(u_min,2), u_max, size(u_max,1), size(u_max,2),
                    verbose ? 1 : 0)
     
     if status == 0
         solver.is_setup[] = true
         
         # Push settings to C++ layer (including adaptive_rho settings)
-        update_settings(solver, 
-                       abs_pri_tol=abs_pri_tol, 
+        update_settings(solver,
+                       abs_pri_tol=abs_pri_tol,
                        abs_dua_tol=abs_dua_tol,
-                       max_iter=max_iter, 
+                       max_iter=max_iter,
                        check_termination=check_termination,
-                       en_state_bound=enable_state_bound, 
-                       en_input_bound=enable_input_bound,
+                       en_state_bound=false,
+                       en_input_bound=false,
+                       en_state_soc=false,
+                       en_input_soc=false,
+                       en_state_linear=false,
+                       en_input_linear=false,
                        adaptive_rho=adaptive_rho,
                        adaptive_rho_min=adaptive_rho_min,
                        adaptive_rho_max=adaptive_rho_max,
@@ -150,7 +144,6 @@ function solve(solver::TinyMPCSolver; verbose::Bool=false)
     solver.is_setup[] || error("Solver not setup")
     _ensure_loaded()
     status = ccall((:solve_mpc, _lib_path()), Int32, (Int32,), verbose ? 1 : 0)
-    status != 0 && error("Solver failed")
     return status
 end
 
@@ -183,9 +176,44 @@ function get_solution(solver::TinyMPCSolver)
     return (states=states, controls=controls)
 end
 
-function set_bound_constraints(solver::TinyMPCSolver, 
-                              x_min::Matrix{Float64}, x_max::Matrix{Float64},
-                              u_min::Matrix{Float64}, u_max::Matrix{Float64}; verbose::Bool=false)
+## Remove old duplicate definition (consolidated below)
+
+function update_settings(solver::TinyMPCSolver;
+                        abs_pri_tol::Float64=1e-3,
+                        abs_dua_tol::Float64=1e-3,
+                        max_iter::Int=100,
+                        check_termination::Bool=true,
+                        en_state_bound::Bool=false,
+                        en_input_bound::Bool=false,
+                        en_state_soc::Bool=false,
+                        en_input_soc::Bool=false,
+                        en_state_linear::Bool=false,
+                        en_input_linear::Bool=false,
+                        adaptive_rho::Bool=false,
+                        adaptive_rho_min::Float64=0.1,
+                        adaptive_rho_max::Float64=10.0,
+                        adaptive_rho_enable_clipping::Bool=true,
+                        verbose::Bool=false)
+    _ensure_loaded()
+    
+    status = ccall((:update_settings, _lib_path()), Int32,
+                   (Float64, Float64, Int32, Int32, Int32, Int32, Int32, Int32, Int32, Int32,
+                    Int32, Float64, Float64, Int32, Int32),
+                   abs_pri_tol, abs_dua_tol, max_iter, check_termination ? 1 : 0,
+                   en_state_bound ? 1 : 0, en_input_bound ? 1 : 0,
+                   en_state_soc ? 1 : 0, en_input_soc ? 1 : 0,
+                   en_state_linear ? 1 : 0, en_input_linear ? 1 : 0,
+                   adaptive_rho ? 1 : 0, adaptive_rho_min, adaptive_rho_max,
+                   adaptive_rho_enable_clipping ? 1 : 0, verbose ? 1 : 0)
+    
+    status != 0 && error("Failed to update settings")
+    return status
+end
+
+# Constraints API
+function set_bound_constraints(solver::TinyMPCSolver,
+                               x_min::Matrix{Float64}, x_max::Matrix{Float64},
+                               u_min::Matrix{Float64}, u_max::Matrix{Float64}; verbose::Bool=false)
     _ensure_loaded()
     status = ccall((:set_bound_constraints, _lib_path()), Int32,
                    (Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32,
@@ -194,33 +222,49 @@ function set_bound_constraints(solver::TinyMPCSolver,
                    u_min, size(u_min,1), size(u_min,2), u_max, size(u_max,1), size(u_max,2),
                    verbose ? 1 : 0)
     status != 0 && error("Failed to set bound constraints")
+    # Flags auto-enabled in C++ binding
     return status
 end
 
-function update_settings(solver::TinyMPCSolver; 
-                         abs_pri_tol::Float64=1e-3, 
-                         abs_dua_tol::Float64=1e-3,
-                         max_iter::Int=100, 
-                         check_termination::Bool=true,
-                         en_state_bound::Bool=false, 
-                         en_input_bound::Bool=false,
-                         adaptive_rho::Bool=false,
-                         adaptive_rho_min::Float64=0.1,
-                         adaptive_rho_max::Float64=10.0,
-                         adaptive_rho_enable_clipping::Bool=true,
-                         verbose::Bool=false)
+function set_linear_constraints(solver::TinyMPCSolver,
+                                Alin_x::Matrix{Float64}, blin_x::Vector{Float64},
+                                Alin_u::Matrix{Float64}, blin_u::Vector{Float64}; verbose::Bool=false)
     _ensure_loaded()
-    
-    status = ccall((:update_settings, _lib_path()), Int32,
-                   (Float64, Float64, Int32, Int32, Int32, Int32, 
-                    Int32, Float64, Float64, Int32, Int32),
-                   abs_pri_tol, abs_dua_tol, max_iter, check_termination ? 1 : 0,
-                   en_state_bound ? 1 : 0, en_input_bound ? 1 : 0,
-                   adaptive_rho ? 1 : 0, adaptive_rho_min, adaptive_rho_max,
-                   adaptive_rho_enable_clipping ? 1 : 0, verbose ? 1 : 0)
-    
-    status != 0 && error("Failed to update settings")
+    status = ccall((:set_linear_constraints, _lib_path()), Int32,
+                   (Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32,
+                    Ptr{Float64}, Int32, Int32, Ptr{Float64}, Int32, Int32),
+                   Alin_x, size(Alin_x,1), size(Alin_x,2), blin_x, length(blin_x),
+                   Alin_u, size(Alin_u,1), size(Alin_u,2), blin_u, length(blin_u),
+                   verbose ? 1 : 0)
+    status != 0 && error("Failed to set linear constraints")
+    # Flags auto-enabled in C++ binding
     return status
+end
+
+function set_cone_constraints(solver::TinyMPCSolver,
+                              Acu::Vector{Int32}, qcu::Vector{Int32}, cu::Vector{Float64},
+                              Acx::Vector{Int32}, qcx::Vector{Int32}, cx::Vector{Float64}; verbose::Bool=false)
+    _ensure_loaded()
+    status = ccall((:set_cone_constraints, _lib_path()), Int32,
+                   (Ptr{Int32}, Int32, Ptr{Int32}, Int32, Ptr{Float64}, Int32,
+                    Ptr{Int32}, Int32, Ptr{Int32}, Int32, Ptr{Float64}, Int32, Int32),
+                   Acu, length(Acu), qcu, length(qcu), cu, length(cu),
+                   Acx, length(Acx), qcx, length(qcx), cx, length(cx),
+                   verbose ? 1 : 0)
+    status != 0 && error("Failed to set cone constraints")
+    # Flags auto-enabled in C++ binding
+    return status
+end
+
+function set_equality_constraints(solver::TinyMPCSolver,
+                                  Aeq_x::Matrix{Float64}, beq_x::Vector{Float64};
+                                  Aeq_u::Matrix{Float64}=zeros(0, size(solver.B[],2)), beq_u::Vector{Float64}=zeros(Float64, 0))
+    # Implement equalities via two inequalities and delegate
+    Alin_x = vcat(Aeq_x, -Aeq_x)
+    blin_x = vcat(beq_x, -beq_x)
+    Alin_u = vcat(Aeq_u, -Aeq_u)
+    blin_u = vcat(beq_u, -beq_u)
+    return set_linear_constraints(solver, Alin_x, blin_x, Alin_u, blin_u)
 end
 
 function print_problem_data(solver::TinyMPCSolver; verbose::Bool=false)
