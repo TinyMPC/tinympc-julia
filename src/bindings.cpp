@@ -17,17 +17,13 @@ static std::unique_ptr<TinySolver> g_solver = nullptr;
 // Global problem dimensions for array extraction
 static int g_nx = 0, g_nu = 0, g_N = 0;
 
-// Setup function - initialize the solver
+// Setup function - initialize the solver (constraints are set separately)
 extern "C" int setup_solver(double* A_data, int A_rows, int A_cols,
                             double* B_data, int B_rows, int B_cols,
                             double* fdyn_data, int fdyn_rows, int fdyn_cols,
                             double* Q_data, int Q_rows, int Q_cols,
                             double* R_data, int R_rows, int R_cols,
                             double rho, int nx, int nu, int N,
-                            double* x_min_data, int x_min_rows, int x_min_cols,
-                            double* x_max_data, int x_max_rows, int x_max_cols,
-                            double* u_min_data, int u_min_rows, int u_min_cols,
-                            double* u_max_data, int u_max_rows, int u_max_cols,
                             int verbose) {
     try {
         if (verbose) {
@@ -46,11 +42,6 @@ extern "C" int setup_solver(double* A_data, int A_rows, int A_cols,
         Eigen::Map<Eigen::MatrixXd> fdyn(fdyn_data, fdyn_rows, fdyn_cols);
         Eigen::Map<Eigen::MatrixXd> Q(Q_data, Q_rows, Q_cols);
         Eigen::Map<Eigen::MatrixXd> R(R_data, R_rows, R_cols);
-        Eigen::Map<Eigen::MatrixXd> x_min(x_min_data, x_min_rows, x_min_cols);
-        Eigen::Map<Eigen::MatrixXd> x_max(x_max_data, x_max_rows, x_max_cols);
-        Eigen::Map<Eigen::MatrixXd> u_min(u_min_data, u_min_rows, u_min_cols);
-        Eigen::Map<Eigen::MatrixXd> u_max(u_max_data, u_max_rows, u_max_cols);
-        
         // Create solver pointer for tiny_setup
         TinySolver* solver_ptr = nullptr;
         
@@ -65,18 +56,6 @@ extern "C" int setup_solver(double* A_data, int A_rows, int A_cols,
                                 nx, nu, N, verbose);
         
         if (status != 0) {
-            return status;
-        }
-        
-        // Set bound constraints using correct API
-        status = tiny_set_bound_constraints(solver_ptr,
-                                           x_min.cast<tinytype>(),
-                                           x_max.cast<tinytype>(),
-                                           u_min.cast<tinytype>(),
-                                           u_max.cast<tinytype>());
-        
-        if (status != 0) {
-            delete solver_ptr;
             return status;
         }
         
@@ -357,6 +336,8 @@ extern "C" int codegen_with_sensitivity(const char* output_dir,
 extern "C" int update_settings(double abs_pri_tol, double abs_dua_tol,
                                 int max_iter, int check_termination,
                                 int en_state_bound, int en_input_bound,
+                                int en_state_soc, int en_input_soc,
+                                int en_state_linear, int en_input_linear,
                                 int adaptive_rho, double adaptive_rho_min,
                                 double adaptive_rho_max, int adaptive_rho_enable_clipping,
                                 int verbose) {
@@ -372,6 +353,10 @@ extern "C" int update_settings(double abs_pri_tol, double abs_dua_tol,
         g_solver->settings->check_termination = check_termination;
         g_solver->settings->en_state_bound = en_state_bound;
         g_solver->settings->en_input_bound = en_input_bound;
+        g_solver->settings->en_state_soc = en_state_soc;
+        g_solver->settings->en_input_soc = en_input_soc;
+        g_solver->settings->en_state_linear = en_state_linear;
+        g_solver->settings->en_input_linear = en_input_linear;
         
         // Update adaptive rho settings
         g_solver->settings->adaptive_rho = adaptive_rho;
@@ -412,6 +397,11 @@ extern "C" int set_bound_constraints(double* x_min_data, int x_min_rows, int x_m
                                                u_max.cast<tinytype>());
         
         if (verbose) std::cout << "set_bound_constraints status: " << status << std::endl;
+        if (status == 0) {
+            // Auto-enable bound flags
+            g_solver->settings->en_state_bound = 1;
+            g_solver->settings->en_input_bound = 1;
+        }
         return status;
         
     } catch (const std::exception& e) {
@@ -419,3 +409,82 @@ extern "C" int set_bound_constraints(double* x_min_data, int x_min_rows, int x_m
         return -1;
     }
 } 
+
+// Set linear constraints with auto-enable
+extern "C" int set_linear_constraints(double* Alin_x_data, int Alin_x_rows, int Alin_x_cols,
+                                       double* blin_x_data, int blin_x_len,
+                                       double* Alin_u_data, int Alin_u_rows, int Alin_u_cols,
+                                       double* blin_u_data, int blin_u_len,
+                                       int verbose) {
+    try {
+        if (!g_solver) {
+            throw std::runtime_error("Solver not initialized");
+        }
+
+        Eigen::Map<Eigen::MatrixXd> Alin_x(Alin_x_data, Alin_x_rows, Alin_x_cols);
+        Eigen::Map<Eigen::MatrixXd> blin_x_in(blin_x_data, blin_x_len, 1);
+        Eigen::Map<Eigen::MatrixXd> Alin_u(Alin_u_data, Alin_u_rows, Alin_u_cols);
+        Eigen::Map<Eigen::MatrixXd> blin_u_in(blin_u_data, blin_u_len, 1);
+
+        Eigen::VectorXd blin_x_vec = Eigen::Map<const Eigen::VectorXd>(blin_x_in.data(), (int)blin_x_in.size());
+        Eigen::VectorXd blin_u_vec = Eigen::Map<const Eigen::VectorXd>(blin_u_in.data(), (int)blin_u_in.size());
+
+        int status = tiny_set_linear_constraints(
+            g_solver.get(),
+            Alin_x.cast<tinytype>(), blin_x_vec.cast<tinytype>(),
+            Alin_u.cast<tinytype>(), blin_u_vec.cast<tinytype>());
+
+        if (verbose) std::cout << "set_linear_constraints status: " << status << std::endl;
+        if (status == 0) {
+            bool has_state_linear = (Alin_x_rows > 0 && blin_x_len > 0);
+            bool has_input_linear = (Alin_u_rows > 0 && blin_u_len > 0);
+            if (has_state_linear) g_solver->settings->en_state_linear = 1;
+            if (has_input_linear) g_solver->settings->en_input_linear = 1;
+        }
+        return status;
+
+    } catch (const std::exception& e) {
+        std::cerr << "set_linear_constraints failed: " << e.what() << std::endl;
+        return -1;
+    }
+}
+
+// Set SOC constraints with auto-enable (inputs first, then states)
+extern "C" int set_cone_constraints(int* Acu_data, int Acu_len,
+                                     int* qcu_data, int qcu_len,
+                                     double* cu_data, int cu_len,
+                                     int* Acx_data, int Acx_len,
+                                     int* qcx_data, int qcx_len,
+                                     double* cx_data, int cx_len,
+                                     int verbose) {
+    try {
+        if (!g_solver) {
+            throw std::runtime_error("Solver not initialized");
+        }
+
+        Eigen::Map<Eigen::VectorXi> Acu(Acu_data, Acu_len);
+        Eigen::Map<Eigen::VectorXi> qcu(qcu_data, qcu_len);
+        Eigen::Map<Eigen::VectorXd> cu_in(cu_data, cu_len);
+        Eigen::Map<Eigen::VectorXi> Acx(Acx_data, Acx_len);
+        Eigen::Map<Eigen::VectorXi> qcx(qcx_data, qcx_len);
+        Eigen::Map<Eigen::VectorXd> cx_in(cx_data, cx_len);
+
+        int status = tiny_set_cone_constraints(
+            g_solver.get(),
+            Acu, qcu, cu_in.cast<tinytype>(),
+            Acx, qcx, cx_in.cast<tinytype>());
+
+        if (verbose) std::cout << "set_cone_constraints status: " << status << std::endl;
+        if (status == 0) {
+            bool has_state_cones = (Acx_len > 0 && qcx_len > 0 && cx_len > 0);
+            bool has_input_cones = (Acu_len > 0 && qcu_len > 0 && cu_len > 0);
+            if (has_state_cones) g_solver->settings->en_state_soc = 1;
+            if (has_input_cones) g_solver->settings->en_input_soc = 1;
+        }
+        return status;
+
+    } catch (const std::exception& e) {
+        std::cerr << "set_cone_constraints failed: " << e.what() << std::endl;
+        return -1;
+    }
+}

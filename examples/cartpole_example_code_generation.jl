@@ -20,9 +20,9 @@ u_max = fill(0.5, 1, N-1)   # nu x (N-1)
 
 # Create solver and setup with bounds
 solver = TinyMPCSolver()
-status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
-                u_min=u_min, u_max=u_max, verbose=false)
+status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
 @assert status == 0
+set_bound_constraints(solver, fill(-Inf, 4, N), fill(Inf, 4, N), u_min, u_max)
 
 # Set references (all zeros for code generation)
 set_x_ref(solver, zeros(4, N))
