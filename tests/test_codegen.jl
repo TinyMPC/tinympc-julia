@@ -1,5 +1,5 @@
 using Test
-include("../src/TinyMPC.jl")
+isdefined(@__MODULE__, :TinyMPC) || include("../src/TinyMPC.jl")
 using .TinyMPC
 using LinearAlgebra
 
@@ -20,13 +20,14 @@ using LinearAlgebra
     
     @testset "Basic Code Generation" begin
         solver = TinyMPCSolver()
-        # Fix: correct dimensions for bounds - should be nu x (N-1) for control bounds
+        x_min = fill(-Inf, 4, N)
+        x_max = fill(Inf, 4, N)
         u_min = fill(-0.5, 1, N-1)  
         u_max = fill(0.5, 1, N-1)
         
-        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
-                       u_min=u_min, u_max=u_max, verbose=false)
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
         @test status == 0
+        @test set_bound_constraints(solver, x_min, x_max, u_min, u_max) == 0
         
         # Set references (required for code generation)
         set_x_ref(solver, zeros(4, N))
@@ -60,15 +61,7 @@ using LinearAlgebra
         set_u_ref(solver, zeros(1, N-1))
         
         # Compute sensitivity matrices
-        cache = compute_cache_terms(solver, A, B, Q, R; rho=rho)
-        ε = 1e-6
-        cache₊ = compute_cache_terms(solver, A, B, Q, R; rho=rho + ε)
-        cache₋ = compute_cache_terms(solver, A, B, Q, R; rho=rho - ε)
-        
-        dK  = (cache₊.Kinf   - cache₋.Kinf)   / (2ε)
-        dP  = (cache₊.Pinf   - cache₋.Pinf)   / (2ε)
-        dC1 = (cache₊.Quu_inv - cache₋.Quu_inv) / (2ε)
-        dC2 = (cache₊.AmBKt  - cache₋.AmBKt)  / (2ε)
+        dK, dP, dC1, dC2 = compute_sensitivity_autograd(solver)
         
         # Generate code with sensitivity
         out_dir = joinpath(test_dir, "sensitivity_codegen")
@@ -149,4 +142,4 @@ using LinearAlgebra
     
     # Cleanup
     rm(test_dir, recursive=true)
-end 
+end
