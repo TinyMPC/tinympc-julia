@@ -1,4 +1,4 @@
-include("../src/TinyMPC.jl")
+isdefined(@__MODULE__, :TinyMPC) || include("../src/TinyMPC.jl")
 using .TinyMPC
 using Test
 using LinearAlgebra
@@ -46,12 +46,15 @@ using LinearAlgebra
     
     @testset "Bounds Constraints" begin
         solver = TinyMPCSolver()
+        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, verbose=false)
+        @test status == 0
+
+        x_min = fill(-Inf, 4, N)
+        x_max = fill(Inf, 4, N)
         u_min = fill(-1.0, 1, N-1)
         u_max = fill(1.0, 1, N-1)
-        
-        status = setup(solver, A, B, zeros(4), Q, R, rho, 4, 1, N, 
-                       u_min=u_min, u_max=u_max, verbose=false)
-        @test status == 0
+
+        @test set_bound_constraints(solver, x_min, x_max, u_min, u_max) == 0
         
         # Verify constraints are respected
         set_x0(solver, [1.0, 0.0, 0.0, 0.0])  # Large initial disturbance
@@ -65,4 +68,4 @@ using LinearAlgebra
         @test all(sol.controls .>= -1.0)
         @test all(sol.controls .<= 1.0)
     end
-end 
+end
